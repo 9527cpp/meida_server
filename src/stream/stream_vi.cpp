@@ -1,4 +1,4 @@
-#include "stream_vi.hpp"
+#include "stream_pipe.hpp"
 #include <unistd.h>
 
 stream_vi::stream_vi()

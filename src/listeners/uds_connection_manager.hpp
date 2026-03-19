@@ -1,8 +1,8 @@
 #ifndef __UDS_CONNECTION_MANAGER_HPP__
 #define __UDS_CONNECTION_MANAGER_HPP__
 
-#include "../stream/stream_listener.hpp"
 #include "uds_stream.hpp"
+#include "../media/media_events.hpp"
 #include <string>
 #include <vector>
 #include <mutex>
@@ -24,7 +24,7 @@ class media_manager;
  */
 class uds_connection_manager {
 public:
-    uds_connection_manager(media_manager *mgr, const std::string &uds_path);
+    uds_connection_manager(media_event_sink *sink, const std::string &uds_path);
     ~uds_connection_manager();
 
     int start();
@@ -57,7 +57,7 @@ private:
     static const char *cmd_name(int cmd);
     int alloc_free_channel_locked(media_type type) const;
 
-    media_manager *mgr_;
+    media_event_sink *sink_;
     std::string uds_path_;
     int listen_fd_;
     std::atomic<bool> running_;

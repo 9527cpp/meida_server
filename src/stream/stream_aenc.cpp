@@ -4,21 +4,21 @@
 #include <cstring>
 #include <unistd.h>
 
-stream_venc::stream_venc(int chn)
+stream_aenc::stream_aenc(int chn)
     : chn_(chn)
 {
 }
 
-void stream_venc::on_stream_data(const char *data, int len)
+void stream_aenc::on_stream_data(const char *data, int len)
 {
     /* 作为 pipe 中段时：收到上一级数据可在此做处理后再转发，当前直接转发 */
     notify_listeners(data, len);
 }
 
-void stream_venc::stream_data_loop()
+void stream_aenc::stream_data_loop()
 {
     struct mpi_intf *mpi = mpi_intf_get_instance();
-    if (!mpi || !mpi->video || !mpi->video->venc_get_data || !mpi->ctx_data)
+    if (!mpi || !mpi->audio || !mpi->audio->aenc_get_data || !mpi->ctx_data)
         return;
 
     char buf[256 * 1024];
@@ -26,7 +26,7 @@ void stream_venc::stream_data_loop()
 
     while (is_running()) {
         len = sizeof(buf);
-        if (mpi->video->venc_get_data(&mpi->ctx_data->v_ctx.venc[chn_], buf, &len) == 0 && len > 0)
+        if (mpi->audio->aenc_get_data(&mpi->ctx_data->a_ctx.aenc[chn_], buf, &len) == 0 && len > 0)
             notify_listeners(buf, len);
         else
             usleep(5000);

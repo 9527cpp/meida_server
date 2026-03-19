@@ -1,61 +1,48 @@
-#include "stream_hdmi_video.hpp"
+#include "stream_pipe.hpp"
 
 stream_hdmi_video::stream_hdmi_video()
-    : vi_(nullptr)
 {
-    for (int i = 0; i < MAX_CHN; i++)
-        venc_[i] = nullptr;
+    /* stream_process_ / stream_output_ 必须先分配为 MAX_CHN 个槽位，否则对 [i] 写入会空指针崩溃 */
+    stream_process_ = new stream_base *[MAX_CHN]();
+    stream_output_ = new stream_base *[MAX_CHN]();
+
+    stream_input_ = new stream_vi();
+    stream_input_->stream_create();
+
+    for (int i = 0; i < MAX_CHN; i++) {
+        /*
+        //TODO: 创建 vpss
+        stream_process_[i] = new stream_vpss(i);
+        stream_process_[i]->stream_create();
+        */
+        stream_output_[i] = new stream_venc(i);
+        stream_output_[i]->stream_create();
+    }
 }
 
 stream_hdmi_video::~stream_hdmi_video()
 {
     for (int i = 0; i < MAX_CHN; i++)
-        stream_pipe_stop(i);
-    delete vi_;
-    vi_ = nullptr;
-    for (int i = 0; i < MAX_CHN; i++) {
-        delete venc_[i];
-        venc_[i] = nullptr;
+        stream_stop(i);
+
+    if (stream_output_) {
+        for (int i = 0; i < MAX_CHN; i++) {
+            delete stream_output_[i];
+            stream_output_[i] = nullptr;
+        }
+        delete[] stream_output_;
+        stream_output_ = nullptr;
     }
-}
 
-void stream_hdmi_video::stream_pipe_create()
-{
-    vi_ = new stream_vi();
-    vi_->stream_create();
-
-    for (int i = 0; i < MAX_CHN; i++) {
-        venc_[i] = new stream_venc(i);
-        venc_[i]->stream_create();
-        pipe_[i].stream_connect(vi_);
-        pipe_[i].stream_connect(venc_[i], venc_[i]);
+    if (stream_process_) {
+        for (int i = 0; i < MAX_CHN; i++) {
+            delete stream_process_[i];
+            stream_process_[i] = nullptr;
+        }
+        delete[] stream_process_;
+        stream_process_ = nullptr;
     }
-}
 
-void stream_hdmi_video::add_channel_listener(int chn, stream_listener *listener)
-{
-    if (chn < 0 || chn >= MAX_CHN || !venc_[chn] || !listener)
-        return;
-    venc_[chn]->stream_add_listener(listener);
-}
-
-void stream_hdmi_video::remove_channel_listener(int chn, stream_listener *listener)
-{
-    if (chn < 0 || chn >= MAX_CHN || !venc_[chn] || !listener)
-        return;
-    venc_[chn]->stream_del_listener(listener);
-}
-
-int stream_hdmi_video::stream_pipe_start(int chn)
-{
-    if (chn < 0 || chn >= MAX_CHN)
-        return -1;
-    return pipe_[chn].stream_pipe_start();
-}
-
-int stream_hdmi_video::stream_pipe_stop(int chn)
-{
-    if (chn < 0 || chn >= MAX_CHN)
-        return -1;
-    return pipe_[chn].stream_pipe_stop();
+    delete stream_input_;
+    stream_input_ = nullptr;
 }

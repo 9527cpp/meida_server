@@ -1,5 +1,4 @@
 #include "uds_connection_manager.hpp"
-#include "../media/media_manager.hpp"
 #include "../mpi_ctx/mpi_ctx_intf.h"
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -90,8 +89,8 @@ static int extract_cmd_from_json_string(const std::string &payload)
 
 } // namespace
 
-uds_connection_manager::uds_connection_manager(media_manager *mgr, const std::string &uds_path)
-    : mgr_(mgr)
+uds_connection_manager::uds_connection_manager(media_event_sink *sink, const std::string &uds_path)
+    : sink_(sink)
     , uds_path_(uds_path)
     , listen_fd_(-1)
     , running_(false)
@@ -227,7 +226,7 @@ int uds_connection_manager::alloc_free_channel_locked(media_type type) const
 
 int uds_connection_manager::start()
 {
-    if (!mgr_ || running_.load())
+    if (!sink_ || running_.load())
         return -1;
 
     listen_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -274,10 +273,9 @@ void uds_connection_manager::stop()
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     for (auto &s : sessions_) {
         if (s.type == media_type::video) {
-            mgr_->remove_channel_listener(s.chn, s.stream.get());
-            mgr_->stop_hdmi_video_channel(s.chn);
+            sink_->post_event({ media_event_type::stop_video, s.chn, s.stream.get() });
         } else {
-            mgr_->stop_hdmi_audio_channel(s.chn);
+            sink_->post_event({ media_event_type::stop_audio, s.chn, nullptr });
         }
         s.stream->set_client_fd(-1);
         close(s.fd);
@@ -316,10 +314,9 @@ void uds_connection_manager::accept_loop()
 
         uds_stream *stream = new uds_stream(client_fd);
         if (req.type == media_type::video) {
-            mgr_->add_channel_listener(chn, stream);
-            mgr_->start_hdmi_video_channel(chn);
+            sink_->post_event({ media_event_type::start_video, chn, stream });
         } else {
-            mgr_->start_hdmi_audio_channel(chn);
+            sink_->post_event({ media_event_type::start_audio, chn, nullptr });
         }
 
         std::lock_guard<std::mutex> lock(sessions_mutex_);
@@ -363,10 +360,9 @@ void uds_connection_manager::cleanup_loop()
                 [fd](const session &s) { return s.fd == fd; });
             if (it != sessions_.end()) {
                 if (it->type == media_type::video) {
-                    mgr_->remove_channel_listener(it->chn, it->stream.get());
-                    mgr_->stop_hdmi_video_channel(it->chn);
+                    sink_->post_event({ media_event_type::stop_video, it->chn, it->stream.get() });
                 } else {
-                    mgr_->stop_hdmi_audio_channel(it->chn);
+                    sink_->post_event({ media_event_type::stop_audio, it->chn, nullptr });
                 }
                 it->stream->set_client_fd(-1);
                 close(it->fd);

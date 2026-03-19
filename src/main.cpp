@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
         /* 单路写文件：仅通道 0 写入 file_path */
         file_out.reset(new file_stream(file_path));
         mgr.set_listener(file_out.get());
-        mgr.start_hdmi_video_channel(0);
+        //mgr.start_hdmi_video_channel(0);
     }
 
     while (g_running)
@@ -226,8 +226,8 @@ int main(int argc, char *argv[])
 
     if (uds_mgr)
         uds_mgr->stop();
-    else
-        mgr.stop_hdmi_video_channel(0);
+    // else
+    //     mgr.stop_hdmi_video_channel(0);
     mgr.deinit();
     fprintf(stderr, "[main] exit\n");
     return 0;

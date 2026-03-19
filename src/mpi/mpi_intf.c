@@ -2,7 +2,7 @@
  * MPI 接口实现：单例注册、上下文设置、初始化/反初始化
  */
 #include "mpi_intf.h"
-#include "mpi_ctx_intf.h"
+#include "../mpi_ctx/mpi_ctx_intf.h"
 #include <stdlib.h>
 #include <string.h>
 

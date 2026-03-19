@@ -6,7 +6,10 @@ media_manager::media_manager()
     : listener_(nullptr)
     , hdmi_check_(nullptr)
     , usb_check_(nullptr)
+    , ev_running_(false)
 {
+    hdmi_video_pipe_.reset(new stream_hdmi_video());
+    hdmi_audio_pipe_.reset(new stream_hdmi_audio());
     hdmi_check_ = new hdmi_check(false);
     usb_check_ = new usb_check(false);
 }
@@ -26,59 +29,89 @@ int media_manager::init()
         return -1;
     if (mpi_intf_init(mpi) != 0)
         return -1;
-    s_hdmi_video_.stream_pipe_create();
+
+    {
+        std::lock_guard<std::mutex> lock(ev_mutex_);
+        ev_running_ = true;
+    }
+    ev_thread_ = std::thread(&media_manager::event_loop, this);
     return 0;
 }
 
 void media_manager::deinit()
 {
+    {
+        std::lock_guard<std::mutex> lock(ev_mutex_);
+        if (ev_running_) {
+            ev_running_ = false;
+            ev_cv_.notify_all();
+        }
+    }
+    if (ev_thread_.joinable())
+        ev_thread_.join();
+
     for (int i = 0; i < MAX_CHN; i++) {
         if (listener_)
-            s_hdmi_video_.remove_channel_listener(i, listener_);
-        s_hdmi_video_.stream_pipe_stop(i);
+            hdmi_video_pipe_->remove_listener(i, listener_);
+        hdmi_video_pipe_->stream_stop(i);
+        hdmi_audio_pipe_->stream_stop(i);
     }
     struct mpi_intf *mpi = mpi_intf_get_instance();
     if (mpi)
         mpi_intf_deinit(mpi);
 }
 
-int media_manager::start_hdmi_video_channel(int chn)
-{
-    if (listener_)
-        s_hdmi_video_.add_channel_listener(chn, listener_);
-    return s_hdmi_video_.stream_pipe_start(chn);
-}
-
-int media_manager::stop_hdmi_video_channel(int chn)
-{
-    return s_hdmi_video_.stream_pipe_stop(chn);
-}
-
-int media_manager::start_hdmi_audio_channel(int chn)
-{
-    (void)chn;
-    return s_hdmi_audio_.stream_start();
-}
-
-int media_manager::stop_hdmi_audio_channel(int chn)
-{
-    (void)chn;
-    return s_hdmi_audio_.stream_stop();
-}
-
-void media_manager::add_channel_listener(int chn, stream_listener *listener)
-{
-    if (listener)
-        s_hdmi_video_.add_channel_listener(chn, listener);
-}
-
-void media_manager::remove_channel_listener(int chn, stream_listener *listener)
-{
-    if (listener)
-        s_hdmi_video_.remove_channel_listener(chn, listener);
-}
 
 void media_manager::set_listener(stream_listener *listener)
 {
     listener_ = listener;
+}
+
+void media_manager::post_event(const media_event &ev)
+{
+    {
+        std::lock_guard<std::mutex> lock(ev_mutex_);
+        if (!ev_running_)
+            return;
+        ev_q_.push(ev);
+    }
+    ev_cv_.notify_one();
+}
+
+void media_manager::event_loop()
+{
+    while (true) {
+        media_event ev;
+        {
+            std::unique_lock<std::mutex> lock(ev_mutex_);
+            ev_cv_.wait(lock, [this]() { return !ev_running_ || !ev_q_.empty(); });
+            if (!ev_running_ && ev_q_.empty())
+                break;
+            ev = ev_q_.front();
+            ev_q_.pop();
+        }
+
+        switch (ev.type) {
+        case media_event_type::start_video:
+            if (ev.listener)
+                hdmi_video_pipe_->add_listener(ev.chn, ev.listener);
+            hdmi_video_pipe_->stream_start(ev.chn);
+            break;
+        case media_event_type::stop_video:
+            if (ev.listener)
+                hdmi_video_pipe_->remove_listener(ev.chn, ev.listener);
+            hdmi_video_pipe_->stream_stop(ev.chn);
+            break;
+        case media_event_type::start_audio:
+            if (ev.listener)
+                hdmi_audio_pipe_->add_listener(ev.chn, ev.listener);
+            hdmi_audio_pipe_->stream_start(ev.chn);
+            break;
+        case media_event_type::stop_audio:
+            if (ev.listener)
+                hdmi_audio_pipe_->remove_listener(ev.chn, ev.listener);
+            hdmi_audio_pipe_->stream_stop(ev.chn);
+            break;
+        }
+    }
 }
