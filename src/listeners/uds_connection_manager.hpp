@@ -14,9 +14,11 @@ class media_manager;
 
 /**
  * UDS 连接管理：每个客户端连接自动分配一个未占用通道(chn)。
- * 协议：客户端连接后先发送 1 字节媒体类型：
- *   - video: 0/'v'/'V'
- *   - audio: 1/'a'/'A'
+ * 协议：
+ *  1) 优先支持 libuds 命令包（带 cmd + json payload）；
+ *  2) 为兼容历史客户端，仍支持 1 字节媒体类型：
+ *     - video: 0/'v'/'V'
+ *     - audio: 1/'a'/'A'
  * 若为 video，启动对应 chn 的 hdmi_video 并把该 chn 数据经 socket 发给客户端。
  * 若为 audio，启动 hdmi_audio。
  */
@@ -42,10 +44,18 @@ private:
         session(int f, int c, media_type t, uds_stream *s) : fd(f), chn(c), type(t), stream(s) {}
     };
 
+    struct connect_request {
+        media_type type;
+        int cmd;
+        std::string json_payload;
+    };
+
     void accept_loop();
     void cleanup_loop();
-    static bool read_media_type(int fd, int timeout_ms, media_type *out_type);
-    int alloc_free_channel_locked() const;
+    static bool parse_connect_request(int fd, int timeout_ms, connect_request *out_req);
+    static bool parse_media_type_from_cmd(int cmd, media_type *out_type);
+    static const char *cmd_name(int cmd);
+    int alloc_free_channel_locked(media_type type) const;
 
     media_manager *mgr_;
     std::string uds_path_;

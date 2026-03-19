@@ -8,11 +8,85 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <cstdint>
+#include <string>
 
 namespace {
 
-const int MEDIA_TYPE_READ_TIMEOUT_MS = 5000;
+const int REQUEST_READ_TIMEOUT_MS = 5000;
 const int CLEANUP_POLL_INTERVAL_MS = 1000;
+const int UDS_MAX_PACKS_NUM = 10;
+const unsigned char UDS_MARK[4] = { 0xaa, 0xbb, 0xcc, 0xdd };
+const int UDS_CMD_VIDEOSERVER_DEF = 0x2000;
+const int VIDEOSERVER_CMD_ASSIGNVIDEO = UDS_CMD_VIDEOSERVER_DEF + 1;
+const int VIDEOSERVER_CMD_ASSIGNAUDIO = UDS_CMD_VIDEOSERVER_DEF + 2;
+const int VIDEOSERVER_CMD_GETRESOLUTION = UDS_CMD_VIDEOSERVER_DEF + 4;
+const int VIDEOSERVER_CMD_GETIFRAME = UDS_CMD_VIDEOSERVER_DEF + 5;
+const int VIDEOSERVER_CMD_SETSTATUSON = UDS_CMD_VIDEOSERVER_DEF + 6;
+const int VIDEOSERVER_CMD_SETSTATUSOFF = UDS_CMD_VIDEOSERVER_DEF + 7;
+const int VIDEOSERVER_CMD_GETSTATUS = UDS_CMD_VIDEOSERVER_DEF + 13;
+const int VIDEOSERVER_CMD_ASSIGNAUDIO_MIC = UDS_CMD_VIDEOSERVER_DEF + 18;
+const int VIDEOSERVER_CMD_GETONEFRAME = UDS_CMD_VIDEOSERVER_DEF + 20;
+const int VIDEOSERVER_CMD_STOPVIDEO = UDS_CMD_VIDEOSERVER_DEF + 21;
+const int VIDEOSERVER_CMD_GETFRAMEINFO = UDS_CMD_VIDEOSERVER_DEF + 22;
+const int VIDEOSERVER_CMD_SETFRAMEINFO = UDS_CMD_VIDEOSERVER_DEF + 23;
+
+struct uds_head {
+    unsigned char mark[4];
+    int cmd;
+    int pack_count;
+    uint32_t size[UDS_MAX_PACKS_NUM];
+    int crc;
+};
+
+static bool wait_readable(int fd, int timeout_ms)
+{
+    struct pollfd pfd = { fd, POLLIN, 0 };
+    return poll(&pfd, 1, timeout_ms) > 0;
+}
+
+static bool read_exact_with_timeout(int fd, void *buf, size_t len, int timeout_ms)
+{
+    unsigned char *p = static_cast<unsigned char *>(buf);
+    size_t got = 0;
+    while (got < len) {
+        if (!wait_readable(fd, timeout_ms))
+            return false;
+        ssize_t n = recv(fd, p + got, len - got, 0);
+        if (n <= 0)
+            return false;
+        got += (size_t)n;
+    }
+    return true;
+}
+
+static int extract_cmd_from_json_string(const std::string &payload)
+{
+    size_t k = payload.find("\"cmd\"");
+    if (k == std::string::npos)
+        return -1;
+    k = payload.find(':', k);
+    if (k == std::string::npos)
+        return -1;
+    k++;
+    while (k < payload.size() && (payload[k] == ' ' || payload[k] == '\t' || payload[k] == '\r' || payload[k] == '\n'))
+        k++;
+    bool neg = false;
+    if (k < payload.size() && payload[k] == '-') {
+        neg = true;
+        k++;
+    }
+    int val = 0;
+    bool has_digit = false;
+    while (k < payload.size() && payload[k] >= '0' && payload[k] <= '9') {
+        has_digit = true;
+        val = val * 10 + (payload[k] - '0');
+        k++;
+    }
+    if (!has_digit)
+        return -1;
+    return neg ? -val : val;
+}
 
 } // namespace
 
@@ -29,38 +103,118 @@ uds_connection_manager::~uds_connection_manager()
     stop();
 }
 
-bool uds_connection_manager::read_media_type(int fd, int timeout_ms, media_type *out_type)
+bool uds_connection_manager::parse_connect_request(int fd, int timeout_ms, connect_request *out_req)
 {
-    if (!out_type)
+    if (!out_req)
         return false;
 
-    struct pollfd pfd = { fd, POLLIN, 0 };
-    int r = poll(&pfd, 1, timeout_ms);
-    if (r <= 0)
-        return false;
+    unsigned char mark[4] = { 0 };
+    ssize_t n = recv(fd, mark, sizeof(mark), MSG_PEEK);
+    if (n == (ssize_t)sizeof(mark) && memcmp(mark, UDS_MARK, sizeof(UDS_MARK)) == 0) {
+        uds_head head;
+        if (!read_exact_with_timeout(fd, &head, sizeof(head), timeout_ms))
+            return false;
+        if (memcmp(head.mark, UDS_MARK, sizeof(UDS_MARK)) != 0)
+            return false;
+        if (head.pack_count < 1 || head.pack_count > UDS_MAX_PACKS_NUM)
+            return false;
+        if (head.size[0] > 1024 * 1024)
+            return false;
 
+        std::string payload;
+        payload.resize(head.size[0]);
+        if (head.size[0] > 0 && !read_exact_with_timeout(fd, &payload[0], head.size[0], timeout_ms))
+            return false;
+
+        for (int i = 1; i < head.pack_count; i++) {
+            uint32_t skip = head.size[i];
+            while (skip > 0) {
+                char tmp[256];
+                size_t chunk = skip > sizeof(tmp) ? sizeof(tmp) : skip;
+                if (!read_exact_with_timeout(fd, tmp, chunk, timeout_ms))
+                    return false;
+                skip -= (uint32_t)chunk;
+            }
+        }
+
+        int cmd = head.cmd;
+        int cmd_in_json = extract_cmd_from_json_string(payload);
+        if (cmd_in_json > 0)
+            cmd = cmd_in_json;
+
+        media_type type;
+        if (!parse_media_type_from_cmd(cmd, &type))
+            return false;
+
+        out_req->type = type;
+        out_req->cmd = cmd;
+        out_req->json_payload = payload;
+        return true;
+    }
+
+    if (!wait_readable(fd, timeout_ms))
+        return false;
     unsigned char t = 0xff;
-    ssize_t n = recv(fd, &t, 1, 0);
+    n = recv(fd, &t, 1, 0);
     if (n != 1)
         return false;
-
     if (t == 0 || t == 'v' || t == 'V') {
-        *out_type = media_type::video;
+        out_req->type = media_type::video;
+        out_req->cmd = VIDEOSERVER_CMD_ASSIGNVIDEO;
+        out_req->json_payload = "{\"cmd\":2001}";
         return true;
     }
     if (t == 1 || t == 'a' || t == 'A') {
-        *out_type = media_type::audio;
+        out_req->type = media_type::audio;
+        out_req->cmd = VIDEOSERVER_CMD_ASSIGNAUDIO;
+        out_req->json_payload = "{\"cmd\":2002}";
         return true;
     }
     return false;
 }
 
-int uds_connection_manager::alloc_free_channel_locked() const
+bool uds_connection_manager::parse_media_type_from_cmd(int cmd, media_type *out_type)
+{
+    if (!out_type)
+        return false;
+    switch (cmd) {
+    case VIDEOSERVER_CMD_ASSIGNVIDEO:
+        *out_type = media_type::video;
+        return true;
+    case VIDEOSERVER_CMD_ASSIGNAUDIO:
+    case VIDEOSERVER_CMD_ASSIGNAUDIO_MIC:
+        *out_type = media_type::audio;
+        return true;
+    default:
+        return false;
+    }
+}
+
+const char *uds_connection_manager::cmd_name(int cmd)
+{
+    switch (cmd) {
+    case VIDEOSERVER_CMD_ASSIGNVIDEO: return "ASSIGNVIDEO";
+    case VIDEOSERVER_CMD_ASSIGNAUDIO: return "ASSIGNAUDIO";
+    case VIDEOSERVER_CMD_GETIFRAME: return "GETIFRAME";
+    case VIDEOSERVER_CMD_GETRESOLUTION: return "GETRESOLUTION";
+    case VIDEOSERVER_CMD_SETSTATUSON: return "SETSTATUSON";
+    case VIDEOSERVER_CMD_SETSTATUSOFF: return "SETSTATUSOFF";
+    case VIDEOSERVER_CMD_GETSTATUS: return "GETSTATUS";
+    case VIDEOSERVER_CMD_ASSIGNAUDIO_MIC: return "ASSIGNAUDIO_MIC";
+    case VIDEOSERVER_CMD_GETONEFRAME: return "GETONEFRAME";
+    case VIDEOSERVER_CMD_STOPVIDEO: return "STOPVIDEO";
+    case VIDEOSERVER_CMD_GETFRAMEINFO: return "GETFRAMEINFO";
+    case VIDEOSERVER_CMD_SETFRAMEINFO: return "SETFRAMEINFO";
+    default: return "UNKNOWN";
+    }
+}
+
+int uds_connection_manager::alloc_free_channel_locked(media_type type) const
 {
     for (int chn = 0; chn < MAX_CHN; chn++) {
         bool used = false;
         for (const auto &s : sessions_) {
-            if (s.chn == chn) {
+            if (s.type == type && s.chn == chn) {
                 used = true;
                 break;
             }
@@ -101,7 +255,7 @@ int uds_connection_manager::start()
     running_ = true;
     accept_thread_ = std::thread(&uds_connection_manager::accept_loop, this);
     cleanup_thread_ = std::thread(&uds_connection_manager::cleanup_loop, this);
-    fprintf(stderr, "[uds_mgr] listening on %s, client sends 1 byte media type (video:0/'v', audio:1/'a'); channel auto-allocated\n", uds_path_.c_str());
+    fprintf(stderr, "[uds_mgr] listening on %s, parse libuds cmd+json (fallback legacy 1-byte media type), channel auto-allocated\n", uds_path_.c_str());
     return 0;
 }
 
@@ -142,9 +296,9 @@ void uds_connection_manager::accept_loop()
         if (client_fd < 0)
             continue;
 
-        media_type type;
-        if (!read_media_type(client_fd, MEDIA_TYPE_READ_TIMEOUT_MS, &type)) {
-            fprintf(stderr, "[uds_mgr] client fd=%d invalid media type or timeout, close\n", client_fd);
+        connect_request req;
+        if (!parse_connect_request(client_fd, REQUEST_READ_TIMEOUT_MS, &req)) {
+            fprintf(stderr, "[uds_mgr] client fd=%d parse request failed or timeout, close\n", client_fd);
             close(client_fd);
             continue;
         }
@@ -152,7 +306,7 @@ void uds_connection_manager::accept_loop()
         int chn = -1;
         {
             std::lock_guard<std::mutex> lock(sessions_mutex_);
-            chn = alloc_free_channel_locked();
+            chn = alloc_free_channel_locked(req.type);
         }
         if (chn < 0) {
             fprintf(stderr, "[uds_mgr] client fd=%d no free channel, close\n", client_fd);
@@ -161,7 +315,7 @@ void uds_connection_manager::accept_loop()
         }
 
         uds_stream *stream = new uds_stream(client_fd);
-        if (type == media_type::video) {
+        if (req.type == media_type::video) {
             mgr_->add_channel_listener(chn, stream);
             mgr_->start_hdmi_video_channel(chn);
         } else {
@@ -169,9 +323,11 @@ void uds_connection_manager::accept_loop()
         }
 
         std::lock_guard<std::mutex> lock(sessions_mutex_);
-        sessions_.emplace_back(client_fd, chn, type, stream);
-        fprintf(stderr, "[uds_mgr] client fd=%d bound to chn=%d type=%s\n",
-                client_fd, chn, type == media_type::video ? "video" : "audio");
+        sessions_.emplace_back(client_fd, chn, req.type, stream);
+        fprintf(stderr, "[uds_mgr] client fd=%d cmd=%d(%s) chn=%d type=%s json_len=%zu\n",
+                client_fd, req.cmd, cmd_name(req.cmd), chn,
+                req.type == media_type::video ? "video" : "audio",
+                req.json_payload.size());
     }
 }
 
