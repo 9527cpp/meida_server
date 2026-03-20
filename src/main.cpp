@@ -1,13 +1,19 @@
 /*
- * media-server 主程序：演示 MPI 注册、ctx 配置、media_manager + 监听者、按 hw_check 启停流
- * 使用方式 1：平台 MPI 实现并注册，ctx 用 json/uci 加载并设置
- * 使用方式 2：创建 media_manager，设置 listener（uds_stream/file_stream），init 后按需启停通道
- * 使用方式 3：UDS 服务端 accept 后 set_client_fd；按 hw_check 结果启停流
+ * media-server 主程序：MPI 注册、ctx 配置、media_manager + 可选 UDS / 文件输出
+ *
+ * 默认：不创建 UDS、不写文件，仅初始化 media_manager 后空转（可用于纯 MPI/检测场景）。
+ *
+ * 参数：
+ *   --enable-uds   启用 Unix socket 多客户端（默认 /tmp/media_server.sock）
+ *   --enable-file  将通道 0 视频码流写入文件（默认 /tmp/media_server.out）
+ *   -h, --help     打印帮助
+ *
+ * 注意：--enable-uds 与 --enable-file 不能同时使用（会争用同一路 hdmi 视频管道）。
  */
 #include "mpi/mpi_intf.h"
 #include "mpi_ctx/mpi_ctx_intf.h"
 #include "media/media_manager.hpp"
-#include "listeners/uds_stream.hpp"
+#include "media/media_events.hpp"
 #include "listeners/file_stream.hpp"
 #include "listeners/uds_connection_manager.hpp"
 
@@ -18,13 +24,13 @@
 #include <memory>
 #include <thread>
 #include <chrono>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#include <fcntl.h>
 
-extern struct mpi_intf stub_mpi;
 extern struct mpi_intf rockit_mpi;
+extern struct mpi_ctx_intf json_ctx_intf;
+extern "C" {
+    extern struct mpi_ctx *default_ctx(void);
+}
+
 static volatile int g_running = 1;
 
 static void signal_handler(int)
@@ -32,54 +38,117 @@ static void signal_handler(int)
     g_running = 0;
 }
 
+static void print_usage(const char *prog)
+{
+    fprintf(stderr,
+            "Usage: %s [OPTIONS]\n"
+            "  --enable-uds    Enable UDS server (multi-client)\n"
+            "  --enable-file   Write channel 0 encoded video to a file\n"
+            "  -h, --help      Show this help\n"
+            "\n"
+            "Options --enable-uds and --enable-file are mutually exclusive.\n",
+            prog);
+}
+
 int main(int argc, char *argv[])
 {
-    // must
-    static struct mpi_intf mpi;
-    struct mpi_ctx_intf *ctx_intf = nullptr;
     media_manager mgr;
-
-    // option
     std::unique_ptr<uds_connection_manager> uds_mgr;
     std::unique_ptr<file_stream> file_out;
     const char *uds_path = "/tmp/media_server.sock";
     const char *file_path = "/tmp/media_server.out";
+    char cfg_path[256] = "/tmp/config.json";
 
-    // 注册信号处理函数
+    // 可替换为其它 MPI 实现
+    static struct mpi_intf *mpi = &rockit_mpi;
+    // 可替换为其它 ctx 实现
+    struct mpi_ctx_intf *ctx_intf = &json_ctx_intf;
+    bool enable_uds = false;
+    bool enable_file = false;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--enable-uds") == 0) {
+            enable_uds = true;
+        } else if (strcmp(argv[i], "--enable-file") == 0) {
+            enable_file = true;
+        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "--cfg-path") == 0) {
+            if (i + 1 < argc) {
+                strncpy(cfg_path, argv[i + 1], sizeof(cfg_path) - 1);
+                i++;
+            } else {
+                fprintf(stderr, "[main] --cfg-path requires an argument\n");
+                print_usage(argv[0]);
+                return 1;
+            }
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (enable_uds && enable_file) {
+        fprintf(stderr, "Error: --enable-uds and --enable-file cannot be used together.\n");
+        print_usage(argv[0]);
+        return 1;
+    }
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    // 设置 mpi, 加载 mpi 配置
-    mpi = rockit_mpi;
-    ctx_intf = mpi_ctx_intf_json_create("/etc/media_server.json");
-    if (!ctx_intf) ctx_intf = mpi_ctx_intf_json_create(nullptr);
+    struct mpi_ctx *ctx_data = ctx_intf->load(cfg_path);
+    if (!ctx_data) {
+        fprintf(stderr, "[main] mpi_ctx load %s failed, use default config !!!\n", cfg_path);
+        ctx_data = default_ctx();
+    }
+    mpi_intf_init(mpi, ctx_data);
 
-    mpi_intf_set_ctx(&mpi, ctx_intf); // 设置 mpi 的 ctx
-    mpi_intf_register(&mpi); // 注册 mpi, 从而 media_manager 可以获取 mpi 实例
+    mpi_intf_register(mpi);
 
-    // 初始化 media_manager, 创建 mpi 各个通道, 启用事件循环(接收如uds来的启用停止流的通知)
     if (mgr.init() != 0) {
         fprintf(stderr, "media_manager init failed\n");
         return 1;
     }
 
-    // 初始化 uds_connection_manager
-    uds_mgr.reset(new uds_connection_manager(&mgr, uds_path));
-    if (uds_mgr->start() != 0) {
-        fprintf(stderr, "uds_connection_manager start failed\n");
-        mgr.deinit();
-        return 1;
+    if (enable_uds) {
+        uds_mgr.reset(new uds_connection_manager(&mgr, uds_path));
+        if (uds_mgr->start() != 0) {
+            fprintf(stderr, "uds_connection_manager start failed\n");
+            mgr.deinit();
+            return 1;
+        }
+        fprintf(stderr, "[main] UDS enabled: %s\n", uds_path);
+    } else if (enable_file) {
+        file_out.reset(new file_stream(file_path));
+        media_event ev_start;
+        ev_start.type = media_event_type::start_video;
+        ev_start.chn = 0;
+        ev_start.listener = file_out.get();
+        mgr.post_event(ev_start);
+        fprintf(stderr, "[main] file output enabled: %s (chn=0)\n", file_path);
+    } else {
+        fprintf(stderr, "[main] no UDS / file mode (use --enable-uds or --enable-file)\n");
     }
 
-    // 主循环, 可用于 主线程接收一些退出事件
-    while (g_running) {
+    while (g_running)
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    if (uds_mgr)
+        uds_mgr->stop();
+
+    if (file_out) {
+        media_event ev_stop;
+        ev_stop.type = media_event_type::stop_video;
+        ev_stop.chn = 0;
+        ev_stop.listener = file_out.get();
+        mgr.post_event(ev_stop);
+        /* 给 event_loop 时间处理 stop，再 deinit 关闭线程 */
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
-    // 停止 uds_connection_manager
-    if (uds_mgr) uds_mgr->stop();
-
-    // 释放资源
     mgr.deinit();
     fprintf(stderr, "[main] exit\n");
     return 0;

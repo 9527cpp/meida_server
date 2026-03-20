@@ -21,6 +21,7 @@ int stream_pipe::stream_start(int chn)
             return ret;
     }
 
+
     if (stream_process_ && stream_process_[chn] && stream_process_[chn]->get_status() != STREAM_STATUS_RUNNING) {
         ret = stream_process_[chn]->stream_start();
         if (ret != 0)

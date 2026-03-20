@@ -21,9 +21,16 @@ public:
     stream_pipe();
     virtual ~stream_pipe() = default;
 
+    /* 启动某个pipe流, 参数表示 output 的chn, 如果前级没启动, 则会默认启动前级节点 */
     virtual int stream_start(int chn);
+
+    /* 停止某个pipe流, 参数表示 output 的chn, 除了不停 input 节点, 其他在pipe上的节点都会停止 */
     virtual int stream_stop(int chn);
+
+    /* 添加某个pipe流的输出监听器, 参数表示 output 的chn */
     virtual void add_listener(int chn, stream_listener *listener);
+
+    /* 删除某个pipe流的输出监听器, 参数表示 output 的chn */
     virtual void remove_listener(int chn, stream_listener *listener);
 
 protected:
@@ -81,6 +88,8 @@ class stream_hdmi_video : public stream_pipe {
 public:
     stream_hdmi_video();
     ~stream_hdmi_video();
+    /* 根据 mpi_ctx.v_ctx.venc_cfg_count 只创建对应数量的 stream_venc（逻辑索引 0..cfg_count-1） */
+    void configure_venc_channels(int cfg_count);
 };
 
 class stream_hdmi_audio : public stream_pipe {

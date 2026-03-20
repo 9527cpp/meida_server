@@ -22,6 +22,9 @@ void stream_base::stream_destroy()
     stream_stop();
     std::lock_guard<std::mutex> lock(listeners_mutex_);
     listeners_.clear();
+
+    std::lock_guard<std::mutex> lock2(connects_mutex_);
+    connects_.clear();
 }
 
 int stream_base::stream_start()
@@ -62,6 +65,25 @@ void stream_base::stream_del_listener(stream_listener *listener)
     auto it = std::find(listeners_.begin(), listeners_.end(), listener);
     if (it != listeners_.end())
         listeners_.erase(it);
+}
+
+void stream_base::stream_add_connect(stream_base *downstream)
+{
+    if (!downstream)
+        return;
+    std::lock_guard<std::mutex> lock(connects_mutex_);
+    if (std::find(connects_.begin(), connects_.end(), downstream) == connects_.end())
+        connects_.push_back(downstream);
+}
+
+void stream_base::stream_del_connect(stream_base *downstream)
+{
+    if (!downstream)
+        return;
+    std::lock_guard<std::mutex> lock(connects_mutex_);
+    auto it = std::find(connects_.begin(), connects_.end(), downstream);
+    if (it != connects_.end())
+        connects_.erase(it);
 }
 
 // 每个 stream 实现自己的 stream_data_loop 中会调用 notify_listeners 通知每个 listeners 的 on_stream_data

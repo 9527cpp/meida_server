@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#define MAX_CHN 4
+#define MAX_CHN 8
 
 /* 系统上下文 */
 struct sys_ctx {
@@ -24,6 +24,7 @@ struct vi_ctx {
 /* 视频编码上下文 */
 struct venc_ctx {
     int chn;
+    int enable; /* 0: not create/use, 1: create/use */
     int bitrate;
     int frame_rate;
     int entype;
@@ -49,6 +50,7 @@ struct aenc_ctx {
 struct video_ctx {
     struct vi_ctx vi;
     struct venc_ctx venc[MAX_CHN];
+    int venc_cfg_count; /* how many venc entries are parsed from config (logical index 0..venc_cfg_count-1) */
 };
 
 /* 音频管道上下文 */
@@ -66,15 +68,9 @@ struct mpi_ctx {
 
 /* 上下文接口：从配置源加载/解析得到 mpi_ctx */
 struct mpi_ctx_intf {
-    struct mpi_ctx *(*load)(void);
+    struct mpi_ctx *(*load)(const char *cfg_path);
     void (*free_ctx)(struct mpi_ctx *ctx);
 };
-
-/* 创建基于 JSON 的上下文实现 */
-struct mpi_ctx_intf *mpi_ctx_intf_json_create(const char *cfg_path);
-
-/* 创建基于 UCI 的上下文实现 */
-struct mpi_ctx_intf *mpi_ctx_intf_uci_create(void);
 
 #ifdef __cplusplus
 }

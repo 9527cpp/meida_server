@@ -1,4 +1,5 @@
 #include "uds_connection_manager.hpp"
+#include "../mpi/mpi_intf.h"
 #include "../mpi_ctx/mpi_ctx_intf.h"
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -210,7 +211,15 @@ const char *uds_connection_manager::cmd_name(int cmd)
 
 int uds_connection_manager::alloc_free_channel_locked(media_type type) const
 {
+    struct mpi_intf *mpi = mpi_intf_get_instance();
+    struct mpi_ctx *ctx_data = mpi ? mpi->ctx_data : NULL;
+
     for (int chn = 0; chn < MAX_CHN; chn++) {
+        if (type == media_type::video && ctx_data) {
+            if (ctx_data->v_ctx.venc[chn].enable == 0)
+                continue;
+        }
+
         bool used = false;
         for (const auto &s : sessions_) {
             if (s.type == type && s.chn == chn) {

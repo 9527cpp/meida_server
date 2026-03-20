@@ -51,11 +51,8 @@ int mpi_intf_register(struct mpi_intf *mpi);
 /* 获取MPI接口实例 */
 struct mpi_intf *mpi_intf_get_instance(void);
 
-/* 设置MPI上下文 */
-void mpi_intf_set_ctx(struct mpi_intf *mpi, struct mpi_ctx_intf *ctx);
-
 /* 初始化MPI接口 */
-int mpi_intf_init(struct mpi_intf *mpi);
+int mpi_intf_init(struct mpi_intf *mpi, struct mpi_ctx *ctx_data);
 
 /* 反初始化MPI接口 */
 int mpi_intf_deinit(struct mpi_intf *mpi);

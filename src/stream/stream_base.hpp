@@ -38,6 +38,10 @@ public:
     void stream_add_listener(stream_listener *listener);
     void stream_del_listener(stream_listener *listener);
 
+    /* 连接下级 stream_base（用于后续做数据链路时的拓扑管理） */
+    void stream_add_connect(stream_base *downstream);
+    void stream_del_connect(stream_base *downstream);
+
     stream_status get_status() const { return status_.load(); }
 
 protected:
@@ -52,6 +56,10 @@ private:
 
     std::vector<stream_listener *> listeners_;
     std::mutex listeners_mutex_;
+
+    std::vector<stream_base *> connects_;
+    std::mutex connects_mutex_;
+
     std::thread th_;
     std::atomic<stream_status> status_;
     std::atomic<bool> running_;
