@@ -84,6 +84,7 @@ static struct mpi_ctx *json_load_impl(const char *cfg_path)
 
         ctx->v_ctx.venc[idx].chn = chn_index_val;
         ctx->v_ctx.venc[idx].enable = enable_val;
+        WriteLog(LOG_INFO, "venc[%d].chn=%d.enable=%d", idx, chn_index_val, enable_val);
 
         if (venc_attr && venc_attr->type == cJSON_Object) {
             entype = cJSON_GetObjectItem(venc_attr, "entype");

@@ -38,7 +38,6 @@ struct mpi_ctx_intf;
 
 /* MPI接口实例 */
 struct mpi_intf {
-    struct mpi_ctx_intf *ctx;   /* 配置加载接口 */
     struct mpi_ctx *ctx_data;   /* 已加载的上下文数据，init 时由 ctx->load() 填充 */
     struct mpi_sys_opt *sys;
     struct mpi_video_opt *video;

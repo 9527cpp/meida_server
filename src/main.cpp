@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
         WriteLog(LOG_ERROR, "mpi_ctx load %s failed, use default config !!!", cfg_path);
         ctx_data = default_ctx();
     }
+
     mpi_intf_init(mpi, ctx_data);
 
     mpi_intf_register(mpi);
@@ -151,6 +152,10 @@ int main(int argc, char *argv[])
         mgr.post_event(ev_stop);
         /* 给 event_loop 时间处理 stop，再 deinit 关闭线程 */
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    if (ctx_data) {
+        ctx_intf->free_ctx(ctx_data);
     }
 
     mgr.deinit();

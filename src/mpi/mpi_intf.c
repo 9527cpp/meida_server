@@ -23,14 +23,14 @@ struct mpi_intf *mpi_intf_get_instance(void)
 
 int mpi_intf_init(struct mpi_intf *mpi, struct mpi_ctx *ctx_data)
 {
-    if (!mpi || !mpi->ctx_data)
+    /* mpi->ctx_data 在初始化前通常为 NULL；这里应该检查传入的 ctx_data */
+    if (!mpi || !ctx_data)
         return -1;
 
     mpi->ctx_data = ctx_data;
 
     if (mpi->sys && mpi->sys->sys_init) {
         if (mpi->sys->sys_init() != 0) {
-            mpi->ctx->free_ctx(ctx_data);
             mpi->ctx_data = NULL;
             return -1;
         }
@@ -92,7 +92,6 @@ err_video:
 do_sys_free:
     if (mpi->sys && mpi->sys->sys_deinit)
         mpi->sys->sys_deinit();
-    mpi->ctx->free_ctx(ctx_data);
     mpi->ctx_data = NULL;
     return -1;
 }
@@ -128,7 +127,6 @@ int mpi_intf_deinit(struct mpi_intf *mpi)
     if (mpi->sys && mpi->sys->sys_deinit)
         mpi->sys->sys_deinit();
 
-    mpi->ctx->free_ctx(ctx_data);
     mpi->ctx_data = NULL;
     return 0;
 }
