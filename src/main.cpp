@@ -56,6 +56,7 @@ static void print_usage(const char *prog)
 
 int main(int argc, char *argv[])
 {
+    media_manager mgr;
     std::unique_ptr<uds_connection_manager> uds_mgr;
     std::unique_ptr<file_stream> file_out;
     const char *uds_path = "/tmp/media_server.sock";
@@ -112,13 +113,6 @@ int main(int argc, char *argv[])
 
     mpi_intf_register(mpi);
 
-    media_manager mgr;
-
-    if (mgr.init() != 0) {
-        WriteLog(LOG_ERROR, "media_manager init failed");
-        return 1;
-    }
-
     if (enable_uds) {
         uds_mgr.reset(new uds_connection_manager(&mgr, uds_path));
         if (uds_mgr->start() != 0) {
@@ -159,7 +153,8 @@ int main(int argc, char *argv[])
         ctx_intf->free_ctx(ctx_data);
     }
 
-    mgr.deinit();
+    mpi_intf_deinit(mpi);
+
     WriteLog(LOG_INFO, "exit");
     return 0;
 }

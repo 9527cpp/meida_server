@@ -19,7 +19,7 @@ class stream_base;
 class stream_pipe {
 public:
     stream_pipe();
-    virtual ~stream_pipe() = default;
+    virtual ~stream_pipe();
 
     /* 启动某个pipe流, 参数表示 output 的chn, 如果前级没启动, 则会默认启动前级节点 */
     virtual int stream_start(int chn);
@@ -32,6 +32,10 @@ public:
 
     /* 删除某个pipe流的输出监听器, 参数表示 output 的chn */
     virtual void remove_listener(int chn, stream_listener *listener);
+
+    virtual int stream_pipe_init();
+
+    virtual void stream_pipe_deinit();
 
 protected:
     stream_base *stream_input_{nullptr};
@@ -87,27 +91,21 @@ private:
 class stream_hdmi_video : public stream_pipe {
 public:
     stream_hdmi_video();
-    ~stream_hdmi_video();
-    /* 根据 mpi_ctx.v_ctx.venc_cfg_count 只创建对应数量的 stream_venc（逻辑索引 0..cfg_count-1） */
-    void configure_venc_channels(int cfg_count);
 };
 
 class stream_hdmi_audio : public stream_pipe {
 public:
     stream_hdmi_audio();
-    ~stream_hdmi_audio();
 };
 
 class stream_usb_video : public stream_pipe {
 public:
     stream_usb_video();
-    ~stream_usb_video();
 };
 
 class stream_mic_audio : public stream_pipe {
 public:
     stream_mic_audio();
-    ~stream_mic_audio();
 };
 
 #endif /* __STREAM_PIPE_HPP__ */

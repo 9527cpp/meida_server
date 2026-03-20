@@ -1,49 +1,31 @@
 #include "media_manager.hpp"
-#include "mpi/mpi_intf.h"
-#include "mpi_ctx/mpi_ctx_intf.h"
 #define MODULE_TAG "media_manager"
 
 #include "log/log_tag.h"
 
 media_manager::media_manager()
-    : hdmi_check_(nullptr)
-    , usb_check_(nullptr)
-    , ev_running_(false)
+    : ev_running_(false)
 {
     hdmi_video_pipe_.reset(new stream_hdmi_video());
     hdmi_audio_pipe_.reset(new stream_hdmi_audio());
     // usb_video_pipe_.reset(new stream_usb_video());
     // mic_audio_pipe_.reset(new stream_mic_audio());
 
-    // hdmi_check_ = new hdmi_check(this, false);
-    // usb_check_ = new usb_check(this, false);
-    hdmi_check_ = new hdmi_check(this, true);
-    usb_check_ = new usb_check(this, true);
+    // hdmi_check_.reset(new hdmi_check(this, false));
+    // usb_check_.reset(new usb_check(this, false));
+    hdmi_check_.reset(new hdmi_check(this, true));
+    usb_check_.reset(new usb_check(this, true));
+
+    init();
 }
 
 media_manager::~media_manager()
 {
     deinit();
-    delete hdmi_check_;
-    delete usb_check_;
-    hdmi_check_ = usb_check_ = nullptr;
 }
 
 int media_manager::init()
 {
-    struct mpi_intf *mpi = mpi_intf_get_instance();
-    if (!mpi)
-        return -1;
-
-    /* 根据 ctx 配置的 venc[] 数组元素个数，延迟创建 stream_venc */
-    if (mpi && mpi->ctx_data) {
-        int cfg_count = mpi->ctx_data->v_ctx.venc_cfg_count;
-        stream_hdmi_video *hdmi_video = dynamic_cast<stream_hdmi_video *>(hdmi_video_pipe_.get());
-        if (hdmi_video) {
-            hdmi_video->configure_venc_channels(cfg_count);
-        }
-    }
-
     {
         std::lock_guard<std::mutex> lock(ev_mutex_);
         ev_running_ = true;
@@ -63,14 +45,6 @@ void media_manager::deinit()
     }
     if (ev_thread_.joinable())
         ev_thread_.join();
-
-    for (int i = 0; i < MAX_CHN; i++) {
-        hdmi_video_pipe_->stream_stop(i);
-        hdmi_audio_pipe_->stream_stop(i);
-    }
-    struct mpi_intf *mpi = mpi_intf_get_instance();
-    if (mpi)
-        mpi_intf_deinit(mpi);
 }
 
 
@@ -154,17 +128,9 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
     const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
     WriteLog(LOG_INFO, "%s %s", t, e);
 
-    struct mpi_intf *mpi = mpi_intf_get_instance();
-    struct mpi_ctx *ctx_data = (mpi ? mpi->ctx_data : NULL);
-
     if (type == hw_type::hdmi) {
         /* HDMI plug_in/out：对所有 enable 的 venc 通道分别 start/stop */
         for (int i = 0; i < MAX_CHN; i++) {
-            if (ctx_data) {
-                if (ctx_data->v_ctx.venc[i].enable == 0)
-                    continue;
-            }
-
             media_event ev_media;
             ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
                                                       : media_event_type::stop_video;

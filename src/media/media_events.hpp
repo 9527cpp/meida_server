@@ -12,6 +12,7 @@ enum class media_event_type {
     assign_audio, /* 关联音频通道 */
     stop_audio, /* 停止音频流 */
     unassign_audio, /* 取消关联音频通道 */
+    /* TODO: 添加更多事件类型 */
 };
 
 struct media_event {
