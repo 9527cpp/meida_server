@@ -285,9 +285,9 @@ void uds_connection_manager::stop()
     std::lock_guard<std::mutex> lock(sessions_mutex_);
     for (auto &s : sessions_) {
         if (s.type == media_type::video) {
-            sink_->post_event({ media_event_type::stop_video, s.chn, s.stream.get() });
+            sink_->post_event({ media_event_type::unassign_video, s.chn, s.stream.get() });
         } else {
-            sink_->post_event({ media_event_type::stop_audio, s.chn, nullptr });
+            sink_->post_event({ media_event_type::unassign_audio, s.chn, s.stream.get() });
         }
         s.stream->set_client_fd(-1);
         close(s.fd);
@@ -326,9 +326,9 @@ void uds_connection_manager::accept_loop()
 
         uds_stream *stream = new uds_stream(client_fd);
         if (req.type == media_type::video) {
-            sink_->post_event({ media_event_type::start_video, chn, stream });
+            sink_->post_event({ media_event_type::assign_video, chn, stream });
         } else {
-            sink_->post_event({ media_event_type::start_audio, chn, nullptr });
+            sink_->post_event({ media_event_type::assign_audio, chn, stream });
         }
 
         std::lock_guard<std::mutex> lock(sessions_mutex_);
@@ -372,9 +372,9 @@ void uds_connection_manager::cleanup_loop()
                 [fd](const session &s) { return s.fd == fd; });
             if (it != sessions_.end()) {
                 if (it->type == media_type::video) {
-                    sink_->post_event({ media_event_type::stop_video, it->chn, it->stream.get() });
+                    sink_->post_event({ media_event_type::unassign_video, it->chn, it->stream.get() });
                 } else {
-                    sink_->post_event({ media_event_type::stop_audio, it->chn, nullptr });
+                    sink_->post_event({ media_event_type::unassign_audio, it->chn, it->stream.get() });
                 }
                 it->stream->set_client_fd(-1);
                 close(it->fd);
