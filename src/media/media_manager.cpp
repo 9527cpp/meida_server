@@ -12,6 +12,8 @@ media_manager::media_manager()
 {
     hdmi_video_pipe_.reset(new stream_hdmi_video());
     hdmi_audio_pipe_.reset(new stream_hdmi_audio());
+    // usb_video_pipe_.reset(new stream_usb_video());
+    // mic_audio_pipe_.reset(new stream_mic_audio());
 
     // hdmi_check_ = new hdmi_check(this, false);
     // usb_check_ = new usb_check(this, false);
@@ -37,8 +39,9 @@ int media_manager::init()
     if (mpi && mpi->ctx_data) {
         int cfg_count = mpi->ctx_data->v_ctx.venc_cfg_count;
         stream_hdmi_video *hdmi_video = dynamic_cast<stream_hdmi_video *>(hdmi_video_pipe_.get());
-        if (hdmi_video)
+        if (hdmi_video) {
             hdmi_video->configure_venc_channels(cfg_count);
+        }
     }
 
     {

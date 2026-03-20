@@ -1,4 +1,6 @@
 #include "stream_pipe.hpp"
+#define MODULE_TAG "stream_hdmi_video"
+#include "log/log_tag.h"
 
 stream_hdmi_video::stream_hdmi_video()
 {
@@ -61,6 +63,7 @@ void stream_hdmi_video::configure_venc_channels(int cfg_count)
             continue;
         stream_output_[i] = new stream_venc(i);
         stream_output_[i]->stream_create();
+        stream_output_[i]->stream_start();
         stream_input_->stream_add_connect(stream_output_[i]);
     }
 }
