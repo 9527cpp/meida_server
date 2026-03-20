@@ -14,7 +14,6 @@ media_manager::media_manager()
     // usb_check_ = new usb_check(this, false);
     hdmi_check_ = new hdmi_check(this, true);
     usb_check_ = new usb_check(this, true);
-
 }
 
 media_manager::~media_manager()
@@ -74,6 +73,12 @@ void media_manager::post_event(const media_event &ev)
     ev_cv_.notify_one();
 }
 
+/*
+    目前有两个地方会发事件
+    1: hw_check 事件回调, 收到事件后 发消息给event_loop
+    2: uds 连接管理, 收到连接请求后 发消息给event_loop
+    从 队列中 取事件, 处理事件: 如启用/停止 视频/音频 流
+*/
 void media_manager::event_loop()
 {
     while (true) {
@@ -108,10 +113,14 @@ void media_manager::event_loop()
                 hdmi_audio_pipe_->remove_listener(ev.chn, ev.listener);
             hdmi_audio_pipe_->stream_stop(ev.chn);
             break;
+        /* TODO: 其他事件处理 */
         }
     }
 }
 
+/*
+    hw_check 事件回调, 收到事件后 发消息给event_loop, 让event_loop去处理对应的流事件, 而不是在此回调中直接调用 stream_start 或 stream_stop 
+*/
 void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
 {
     const char *t = "unknown";
@@ -123,4 +132,23 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
 
     const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
     fprintf(stderr, "[hw_check] %s %s\n", t, e);
+
+    media_event ev_media;
+    ev_media.type = media_event_type::start_video;
+    ev_media.chn = 0;
+    ev_media.listener = nullptr;
+    if (type == hw_type::hdmi) {
+        if (ev == hw_event::plug_in) {
+            ev_media.type = media_event_type::start_video;
+        } else {
+            ev_media.type = media_event_type::stop_video;
+        }
+    } else if (type == hw_type::usb) {
+        if (ev == hw_event::plug_in) {
+            ev_media.type = media_event_type::start_video;
+        } else {
+            ev_media.type = media_event_type::stop_video;
+        }
+    }
+    post_event(ev_media);
 }

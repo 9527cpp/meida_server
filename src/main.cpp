@@ -34,9 +34,12 @@ static void signal_handler(int)
 
 int main(int argc, char *argv[])
 {
+    // must
     static struct mpi_intf mpi;
     struct mpi_ctx_intf *ctx_intf = nullptr;
     media_manager mgr;
+
+    // option
     std::unique_ptr<uds_connection_manager> uds_mgr;
     std::unique_ptr<file_stream> file_out;
     const char *uds_path = "/tmp/media_server.sock";
@@ -50,10 +53,11 @@ int main(int argc, char *argv[])
     mpi = rockit_mpi;
     ctx_intf = mpi_ctx_intf_json_create("/etc/media_server.json");
     if (!ctx_intf) ctx_intf = mpi_ctx_intf_json_create(nullptr);
-    mpi_intf_set_ctx(&mpi, ctx_intf);
-    mpi_intf_register(&mpi);
 
-    // 初始化 media_manager
+    mpi_intf_set_ctx(&mpi, ctx_intf); // 设置 mpi 的 ctx
+    mpi_intf_register(&mpi); // 注册 mpi, 从而 media_manager 可以获取 mpi 实例
+
+    // 初始化 media_manager, 创建 mpi 各个通道, 启用事件循环(接收如uds来的启用停止流的通知)
     if (mgr.init() != 0) {
         fprintf(stderr, "media_manager init failed\n");
         return 1;
@@ -67,7 +71,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // 主循环
+    // 主循环, 可用于 主线程接收一些退出事件
     while (g_running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
