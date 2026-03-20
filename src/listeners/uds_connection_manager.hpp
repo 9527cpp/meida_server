@@ -10,10 +10,8 @@
 #include <atomic>
 #include <thread>
 
-class media_manager;
-
 /**
- * UDS 连接管理：每个客户端连接自动分配一个未占用通道(chn)。
+ * UDS 连接管理：每个客户端连接自动分配一个未占用通道(chn), 并添加一个uds的数据回调，用于将数据发送到客户端。
  * 协议：
  *  1) 优先支持 libuds 命令包（带 cmd + json payload）；
  *  2) 为兼容历史客户端，仍支持 1 字节媒体类型：
