@@ -1,9 +1,9 @@
-#include "usb_check.hpp"
+#include "hw_check.hpp"
 #include <dirent.h>
 #include <cstring>
 
-usb_check::usb_check(bool run_thread_check)
-    : hw_check(run_thread_check)
+usb_check::usb_check(hw_check_listener *listener, bool run_thread_check)
+    : hw_check(hw_type::usb, listener, run_thread_check)
 {
     check_once();
 }

@@ -9,8 +9,12 @@ media_manager::media_manager()
 {
     hdmi_video_pipe_.reset(new stream_hdmi_video());
     hdmi_audio_pipe_.reset(new stream_hdmi_audio());
-    hdmi_check_ = new hdmi_check(false);
-    usb_check_ = new usb_check(false);
+
+    // hdmi_check_ = new hdmi_check(this, false);
+    // usb_check_ = new usb_check(this, false);
+    hdmi_check_ = new hdmi_check(this, true);
+    usb_check_ = new usb_check(this, true);
+
 }
 
 media_manager::~media_manager()
@@ -106,4 +110,17 @@ void media_manager::event_loop()
             break;
         }
     }
+}
+
+void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
+{
+    const char *t = "unknown";
+    switch (type) {
+    case hw_type::hdmi: t = "hdmi"; break;
+    case hw_type::usb: t = "usb"; break;
+    case hw_type::mic: t = "mic"; break;
+    }
+
+    const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
+    fprintf(stderr, "[hw_check] %s %s\n", t, e);
 }

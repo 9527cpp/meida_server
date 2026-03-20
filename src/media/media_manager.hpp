@@ -4,8 +4,6 @@
 #include "../stream/stream_pipe.hpp"
 #include "../stream/stream_listener.hpp"
 #include "../hw_check/hw_check.hpp"
-#include "../hw_check/hdmi_check.hpp"
-#include "../hw_check/usb_check.hpp"
 #include "media_events.hpp"
 #include <condition_variable>
 #include <memory>
@@ -13,7 +11,7 @@
 #include <queue>
 
 /* 全局 media 管理：MPI/ctx 单例、各路流、监听者、硬件检测 */
-class media_manager : public media_event_sink {
+class media_manager : public media_event_sink, public hw_check_listener {
 public:
     media_manager();
     ~media_manager();
@@ -27,6 +25,9 @@ public:
     int stream_stop(int chn);
 
     void post_event(const media_event &ev) override;
+
+    /* hw_check 事件回调 */
+    void on_hw_check_notify(hw_type type, hw_event ev) override;
 
 private:
     void event_loop();

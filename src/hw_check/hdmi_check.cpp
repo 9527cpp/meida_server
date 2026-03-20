@@ -1,9 +1,9 @@
-#include "hdmi_check.hpp"
+#include "hw_check.hpp"
 #include <fstream>
 #include <string>
 
-hdmi_check::hdmi_check(bool run_thread_check)
-    : hw_check(run_thread_check)
+hdmi_check::hdmi_check(hw_check_listener *listener, bool run_thread_check)
+    : hw_check(hw_type::hdmi, listener, run_thread_check)
 {
     check_once();
 }
