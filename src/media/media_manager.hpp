@@ -26,9 +26,6 @@ public:
     int stream_start(int chn);
     int stream_stop(int chn);
 
-    void set_listener(stream_listener *listener);
-    stream_listener *get_listener() const { return listener_; }
-
     void post_event(const media_event &ev) override;
 
 private:
@@ -39,7 +36,6 @@ private:
     std::unique_ptr<stream_pipe> usb_video_pipe_;
     std::unique_ptr<stream_pipe> mic_audio_pipe_;
 
-    stream_listener *listener_;
     hw_check *hdmi_check_;
     hw_check *usb_check_;
 

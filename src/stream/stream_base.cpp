@@ -31,6 +31,7 @@ int stream_base::stream_start()
     running_ = true;
     th_ = std::thread(thread_entry, this);
     status_.store(STREAM_STATUS_RUNNING);
+    printf("[stream_base] stream_start: %p status=%d running=%d\n", this, status_.load(), running_.load());
     return 0;
 }
 
@@ -42,6 +43,7 @@ int stream_base::stream_stop()
     if (th_.joinable())
         th_.join();
     status_.store(STREAM_STATUS_STOPPED);
+    printf("[stream_base] stream_stop: %p status=%d running=%d\n", this, status_.load(), running_.load());
     return 0;
 }
 
@@ -62,6 +64,7 @@ void stream_base::stream_del_listener(stream_listener *listener)
         listeners_.erase(it);
 }
 
+// 每个 stream 实现自己的 stream_data_loop 中会调用 notify_listeners 通知每个 listeners 的 on_stream_data
 void stream_base::notify_listeners(const char *data, int len)
 {
     std::vector<stream_listener *> copy;
@@ -69,10 +72,13 @@ void stream_base::notify_listeners(const char *data, int len)
         std::lock_guard<std::mutex> lock(listeners_mutex_);
         copy = listeners_;
     }
-    for (auto *l : copy)
+    for (auto *l : copy) {
+        printf("[stream_base] notify_listeners: %p listener=%p\n", this, l);
         l->on_stream_data(data, len);
+    }
 }
 
+// 每个 stream 去实现自己单独的 取流逻辑
 void stream_base::thread_entry(stream_base *self)
 {
     if (self)

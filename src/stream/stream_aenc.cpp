@@ -9,12 +9,6 @@ stream_aenc::stream_aenc(int chn)
 {
 }
 
-void stream_aenc::on_stream_data(const char *data, int len)
-{
-    /* 作为 pipe 中段时：收到上一级数据可在此做处理后再转发，当前直接转发 */
-    notify_listeners(data, len);
-}
-
 void stream_aenc::stream_data_loop()
 {
     struct mpi_intf *mpi = mpi_intf_get_instance();

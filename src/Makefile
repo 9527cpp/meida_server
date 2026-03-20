@@ -17,14 +17,14 @@ MEDIA_DIR  := $(SRC_DIR)/media
 
 INCLUDES := -I$(SRC_DIR) -I$(MPI_DIR) -I$(CTX_DIR) -I$(STREAM_DIR) -I$(LISTEN_DIR) -I$(HW_DIR) -I$(MEDIA_DIR)
 
-C_SRCS   := $(MPI_DIR)/mpi_intf.c $(CTX_DIR)/mpi_ctx_intf.c
+C_SRCS   := $(MPI_DIR)/mpi_intf.c $(CTX_DIR)/mpi_ctx_intf.c $(MPI_DIR)/mpi_rockit.c $(MPI_DIR)/mpi_stub.c
 CXX_SRCS := $(STREAM_DIR)/stream_base.cpp $(STREAM_DIR)/stream_pipe.cpp \
             $(STREAM_DIR)/stream_vi.cpp $(STREAM_DIR)/stream_venc.cpp \
             $(STREAM_DIR)/stream_ai.cpp $(STREAM_DIR)/stream_aenc.cpp \
             $(STREAM_DIR)/stream_hdmi_video.cpp $(STREAM_DIR)/stream_hdmi_audio.cpp \
             $(LISTEN_DIR)/uds_stream.cpp $(LISTEN_DIR)/uds_connection_manager.cpp $(LISTEN_DIR)/file_stream.cpp \
             $(HW_DIR)/hw_check.cpp $(HW_DIR)/hdmi_check.cpp $(HW_DIR)/usb_check.cpp \
-            $(MEDIA_DIR)/media_manager.cpp
+            $(MEDIA_DIR)/media_manager.cpp 
 
 OBJS := $(C_SRCS:.c=.o) $(CXX_SRCS:.cpp=.o)
 LIB  := libmedia_server.a

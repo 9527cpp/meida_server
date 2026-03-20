@@ -3,8 +3,7 @@
 #include "../mpi_ctx/mpi_ctx_intf.h"
 
 media_manager::media_manager()
-    : listener_(nullptr)
-    , hdmi_check_(nullptr)
+    : hdmi_check_(nullptr)
     , usb_check_(nullptr)
     , ev_running_(false)
 {
@@ -51,8 +50,6 @@ void media_manager::deinit()
         ev_thread_.join();
 
     for (int i = 0; i < MAX_CHN; i++) {
-        if (listener_)
-            hdmi_video_pipe_->remove_listener(i, listener_);
         hdmi_video_pipe_->stream_stop(i);
         hdmi_audio_pipe_->stream_stop(i);
     }
@@ -61,11 +58,6 @@ void media_manager::deinit()
         mpi_intf_deinit(mpi);
 }
 
-
-void media_manager::set_listener(stream_listener *listener)
-{
-    listener_ = listener;
-}
 
 void media_manager::post_event(const media_event &ev)
 {

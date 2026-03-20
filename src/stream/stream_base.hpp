@@ -13,6 +13,13 @@ enum stream_status {
     STREAM_STATUS_RUNNING = 1
 };
 
+enum stream_type {
+    STREAM_TYPE_VI = 0,
+    STREAM_TYPE_VENC = 1,
+    STREAM_TYPE_AI = 2,
+    STREAM_TYPE_AENC = 3,
+};
+
 /* 基本流：负责 MPI 取数线程、监听者列表、启停 */
 class stream_base {
 public:
