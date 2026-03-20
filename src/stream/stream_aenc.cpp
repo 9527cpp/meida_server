@@ -1,6 +1,6 @@
 #include "stream_pipe.hpp"
-#include "../mpi/mpi_intf.h"
-#include "../mpi_ctx/mpi_ctx_intf.h"
+#include "mpi/mpi_intf.h"
+#include "mpi_ctx/mpi_ctx_intf.h"
 #include <cstring>
 #include <unistd.h>
 

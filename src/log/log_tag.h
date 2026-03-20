@@ -64,7 +64,7 @@ static void write_log(const char *evt, const char *str, ...) {
 #endif /* ORAY_LOGGER */
 
 #ifndef MODULE_TAG
-#define MODULE_TAG "UNKNOWN"
+#define MODULE_TAG "unknown"
 #endif
 
 #ifdef ORAY_LOGGER

@@ -1,7 +1,7 @@
 #ifndef __FILE_STREAM_HPP__
 #define __FILE_STREAM_HPP__
 
-#include "../stream/stream_listener.hpp"
+#include "stream/stream_listener.hpp"
 #include <string>
 #include <cstdio>
 

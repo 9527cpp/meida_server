@@ -26,7 +26,7 @@
 #include <chrono>
 
 // module log tag
-#define MODULE_TAG "MAIN"
+#define MODULE_TAG "main"
 
 #include "log/log_tag.h"
 
@@ -46,12 +46,11 @@ static void signal_handler(int)
 static void print_usage(const char *prog)
 {
     WriteLog(LOG_INFO,
-              "Usage: %s [OPTIONS]\n"
-              "  --enable-uds    Enable UDS server (multi-client)\n"
-              "  --enable-file   Write channel 0 encoded video to a file\n"
-              "  -h, --help      Show this help\n"
-              "\n"
-              "Options --enable-uds and --enable-file are mutually exclusive.\n",
+              "Usage: %s [OPTIONS]"
+              "  --enable-uds    Enable UDS server (multi-client)"
+              "  --enable-file   Write channel 0 encoded video to a file"
+              "  -h, --help      Show this help"
+              "Options --enable-uds and --enable-file are mutually exclusive.",
               prog);
 }
 
@@ -84,19 +83,19 @@ int main(int argc, char *argv[])
                 strncpy(cfg_path, argv[i + 1], sizeof(cfg_path) - 1);
                 i++;
             } else {
-                WriteLog(LOG_ERROR, "[main] --cfg-path requires an argument\n");
+                WriteLog(LOG_ERROR, "--cfg-path requires an argument");
                 print_usage(argv[0]);
                 return 1;
             }
         } else {
-            WriteLog(LOG_ERROR, "Unknown option: %s\n", argv[i]);
+            WriteLog(LOG_ERROR, "Unknown option: %s", argv[i]);
             print_usage(argv[0]);
             return 1;
         }
     }
 
     if (enable_uds && enable_file) {
-        WriteLog(LOG_ERROR, "Error: --enable-uds and --enable-file cannot be used together.\n");
+        WriteLog(LOG_ERROR, "Error: --enable-uds and --enable-file cannot be used together.");
         print_usage(argv[0]);
         return 1;
     }
@@ -106,7 +105,7 @@ int main(int argc, char *argv[])
 
     struct mpi_ctx *ctx_data = ctx_intf->load(cfg_path);
     if (!ctx_data) {
-        WriteLog(LOG_ERROR, "[main] mpi_ctx load %s failed, use default config !!!\n", cfg_path);
+        WriteLog(LOG_ERROR, "mpi_ctx load %s failed, use default config !!!", cfg_path);
         ctx_data = default_ctx();
     }
     mpi_intf_init(mpi, ctx_data);
@@ -114,18 +113,18 @@ int main(int argc, char *argv[])
     mpi_intf_register(mpi);
 
     if (mgr.init() != 0) {
-        WriteLog(LOG_ERROR, "media_manager init failed\n");
+        WriteLog(LOG_ERROR, "media_manager init failed");
         return 1;
     }
 
     if (enable_uds) {
         uds_mgr.reset(new uds_connection_manager(&mgr, uds_path));
         if (uds_mgr->start() != 0) {
-            WriteLog(LOG_ERROR, "uds_connection_manager start failed\n");
+            WriteLog(LOG_ERROR, "uds_connection_manager start failed");
             mgr.deinit();
             return 1;
         }
-        WriteLog(LOG_INFO, "[main] UDS enabled: %s\n", uds_path);
+        WriteLog(LOG_INFO, "UDS enabled: %s", uds_path);
     } else if (enable_file) {
         file_out.reset(new file_stream(file_path));
         media_event ev_start;
@@ -133,9 +132,9 @@ int main(int argc, char *argv[])
         ev_start.chn = 0;
         ev_start.listener = file_out.get();
         mgr.post_event(ev_start);
-        WriteLog(LOG_INFO, "[main] file output enabled: %s (chn=0)\n", file_path);
+        WriteLog(LOG_INFO, "file output enabled: %s (chn=0)", file_path);
     } else {
-        WriteLog(LOG_WARNING, "[main] no UDS / file mode (use --enable-uds or --enable-file)\n");
+        WriteLog(LOG_WARNING, "no UDS / file mode (use --enable-uds or --enable-file)");
     }
 
     while (g_running)
@@ -155,6 +154,6 @@ int main(int argc, char *argv[])
     }
 
     mgr.deinit();
-    WriteLog(LOG_INFO, "[main] exit\n");
+    WriteLog(LOG_INFO, "exit");
     return 0;
 }

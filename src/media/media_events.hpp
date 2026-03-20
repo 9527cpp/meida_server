@@ -1,7 +1,7 @@
 #ifndef __MEDIA_EVENTS_HPP__
 #define __MEDIA_EVENTS_HPP__
 
-#include "../stream/stream_listener.hpp"
+#include "stream/stream_listener.hpp"
 
 enum class media_event_type {
     start_video,

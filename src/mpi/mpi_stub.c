@@ -15,61 +15,61 @@
 #include "mpi_intf.h"
 #include <stdio.h>
 
-#define MODULE_TAG "MPI_STUB"
+#define MODULE_TAG "mpi_stub"
 
-#include "../log/log_tag.h"
+#include "log/log_tag.h"
 
 static int stub_sys_init(void)
 {
-    WriteLog(LOG_INFO, "[mpi] sys_init\n");
+    WriteLog(LOG_INFO, "sys_init");
     return 0;
 }
 
 static int stub_sys_deinit(void)
 {
-    WriteLog(LOG_INFO, "[mpi] sys_deinit\n");
+    WriteLog(LOG_INFO, "sys_deinit");
     return 0;
 }
 
 static int stub_vi_init(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] vi_init\n");
+    WriteLog(LOG_INFO, "vi_init");
     return 0;
 }
 
 static int stub_vi_deinit(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] vi_deinit\n");
+    WriteLog(LOG_INFO, "vi_deinit");
     return 0;
 }
 
 static int stub_vpss_init(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] vpss_init\n");
+    WriteLog(LOG_INFO, "vpss_init");
     return 0;
 }
 
 static int stub_vpss_deinit(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] vpss_deinit\n");
+    WriteLog(LOG_INFO, "vpss_deinit");
     return 0;
 }
 
 static int stub_venc_init(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] venc_init\n");
+    WriteLog(LOG_INFO, "venc_init");
     return 0;
 }
 
 static int stub_venc_deinit(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] venc_deinit\n");
+    WriteLog(LOG_INFO, "venc_deinit");
     return 0;
 }
 
@@ -87,28 +87,28 @@ static int stub_venc_get_data(void *ctx, void *data, int *len)
 static int stub_ai_init(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] ai_init\n");
+    WriteLog(LOG_INFO, "ai_init");
     return 0;
 }
 
 static int stub_ai_deinit(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] ai_deinit\n");
+    WriteLog(LOG_INFO, "ai_deinit");
     return 0;
 }
 
 static int stub_aenc_init(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] aenc_init\n");
+    WriteLog(LOG_INFO, "aenc_init");
     return 0;
 }
 
 static int stub_aenc_deinit(void *ctx)
 {
     (void)ctx;
-    WriteLog(LOG_INFO, "[mpi] aenc_deinit\n");
+    WriteLog(LOG_INFO, "aenc_deinit");
     return 0;
 }
 

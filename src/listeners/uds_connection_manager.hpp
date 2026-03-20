@@ -2,7 +2,7 @@
 #define __UDS_CONNECTION_MANAGER_HPP__
 
 #include "uds_stream.hpp"
-#include "../media/media_events.hpp"
+#include "media/media_events.hpp"
 #include <string>
 #include <vector>
 #include <mutex>

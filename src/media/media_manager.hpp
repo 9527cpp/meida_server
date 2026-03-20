@@ -1,9 +1,9 @@
 #ifndef __MEDIA_MANAGER_HPP__
 #define __MEDIA_MANAGER_HPP__
 
-#include "../stream/stream_pipe.hpp"
-#include "../stream/stream_listener.hpp"
-#include "../hw_check/hw_check.hpp"
+#include "stream/stream_pipe.hpp"
+#include "stream/stream_listener.hpp"
+#include "hw_check/hw_check.hpp"
 #include "media_events.hpp"
 #include <condition_variable>
 #include <memory>

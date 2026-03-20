@@ -3,16 +3,16 @@
 #include <string.h>
 #include <stdio.h>
 #include "json/cJSON.h"
-#define MODULE_TAG "MPI_CTX_JSON"
+#define MODULE_TAG "mpi_ctx_json"
 
-#include "../log/log_tag.h"
+#include "log/log_tag.h"
 
 
 static struct mpi_ctx *json_load_impl(const char *cfg_path)
 {
     FILE *fp = fopen(cfg_path, "rb");
     if (!fp) {
-        WriteLog(LOG_ERROR, "[mpi_ctx] json file open failed path=%s\n", cfg_path);
+        WriteLog(LOG_ERROR, "json file open failed path=%s", cfg_path);
         return NULL;
     }
 
@@ -41,7 +41,7 @@ static struct mpi_ctx *json_load_impl(const char *cfg_path)
     free(buf);
     if (!root)
     {
-        WriteLog(LOG_ERROR, "[mpi_ctx] json parse failed cfg_path=%s err_ptr=%s\n", cfg_path,
+        WriteLog(LOG_ERROR, "json parse failed cfg_path=%s err_ptr=%s", cfg_path,
                   cJSON_GetErrorPtr() ? cJSON_GetErrorPtr() : "(null)");
         return NULL;
     }

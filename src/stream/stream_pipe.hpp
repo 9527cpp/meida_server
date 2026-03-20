@@ -3,7 +3,7 @@
 
 #include "stream_base.hpp"
 #include "stream_listener.hpp"
-#include "../mpi_ctx/mpi_ctx_intf.h"
+#include "mpi_ctx/mpi_ctx_intf.h"
 
 class stream_base;
 

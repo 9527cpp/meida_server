@@ -1,7 +1,7 @@
 #ifndef __UDS_STREAM_HPP__
 #define __UDS_STREAM_HPP__
 
-#include "../stream/stream_listener.hpp"
+#include "stream/stream_listener.hpp"
 #include <string>
 
 /* 将流数据通过 Unix Domain Socket 发给客户端 */

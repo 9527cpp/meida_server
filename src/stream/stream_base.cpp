@@ -1,8 +1,8 @@
 #include "stream_base.hpp"
 #include <algorithm>
-#define MODULE_TAG "STREAM_BASE"
+#define MODULE_TAG "stream_base"
 
-#include "../log/log_tag.h"
+#include "log/log_tag.h"
 
 stream_base::stream_base()
     : status_(STREAM_STATUS_STOPPED)
@@ -37,7 +37,7 @@ int stream_base::stream_start()
     running_ = true;
     th_ = std::thread(thread_entry, this);
     status_.store(STREAM_STATUS_RUNNING);
-    WriteLog(LOG_DEBUG, "[stream_base] stream_start: %p status=%d running=%d\n",
+    WriteLog(LOG_DEBUG, "stream_start: %p status=%d running=%d",
              this, status_.load(), running_.load());
     return 0;
 }
@@ -50,7 +50,7 @@ int stream_base::stream_stop()
     if (th_.joinable())
         th_.join();
     status_.store(STREAM_STATUS_STOPPED);
-    WriteLog(LOG_DEBUG, "[stream_base] stream_stop: %p status=%d running=%d\n",
+    WriteLog(LOG_DEBUG, "stream_stop: %p status=%d running=%d",
              this, status_.load(), running_.load());
     return 0;
 }
@@ -100,7 +100,7 @@ void stream_base::notify_listeners(const char *data, int len)
         copy = listeners_;
     }
     for (auto *l : copy) {
-        WriteLog(LOG_DEBUG, "[stream_base] notify_listeners: %p listener=%p\n", this, l);
+        WriteLog(LOG_DEBUG, "notify_listeners: %p listener=%p", this, l);
         l->on_stream_data(data, len);
     }
 }

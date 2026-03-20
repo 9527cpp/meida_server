@@ -1,9 +1,9 @@
 #include "media_manager.hpp"
-#include "../mpi/mpi_intf.h"
-#include "../mpi_ctx/mpi_ctx_intf.h"
-#define MODULE_TAG "MEDIA_MANAGER"
+#include "mpi/mpi_intf.h"
+#include "mpi_ctx/mpi_ctx_intf.h"
+#define MODULE_TAG "media_manager"
 
-#include "../log/log_tag.h"
+#include "log/log_tag.h"
 
 media_manager::media_manager()
     : hdmi_check_(nullptr)
@@ -110,7 +110,7 @@ void media_manager::event_loop()
             if (ev.chn < 0 || ev.chn >= MAX_CHN)
                 break;
             if (ctx_data && ctx_data->v_ctx.venc[ev.chn].enable == 0) {
-                WriteLog(LOG_DEBUG, "[media_manager] skip start_video: chn=%d enable=0\n", ev.chn);
+                WriteLog(LOG_DEBUG, "skip start_video: chn=%d enable=0", ev.chn);
                 break;
             }
             if (ev.listener)
@@ -151,7 +151,7 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
     }
 
     const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
-    WriteLog(LOG_INFO, "[hw_check] %s %s\n", t, e);
+    WriteLog(LOG_INFO, "%s %s", t, e);
 
     media_event ev_media;
     ev_media.type = media_event_type::start_video;

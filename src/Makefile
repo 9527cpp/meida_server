@@ -14,8 +14,9 @@ STREAM_DIR := $(SRC_DIR)/stream
 LISTEN_DIR := $(SRC_DIR)/listeners
 HW_DIR     := $(SRC_DIR)/hw_check
 MEDIA_DIR  := $(SRC_DIR)/media
+LOG_DIR    := $(SRC_DIR)/log
 
-INCLUDES := -I$(SRC_DIR) -I$(MPI_DIR) -I$(CTX_DIR) -I$(STREAM_DIR) -I$(LISTEN_DIR) -I$(HW_DIR) -I$(MEDIA_DIR) 
+INCLUDES := -I$(SRC_DIR) -I$(MPI_DIR) -I$(CTX_DIR) -I$(STREAM_DIR) -I$(LISTEN_DIR) -I$(HW_DIR) -I$(MEDIA_DIR) -I$(LOG_DIR)
 
 C_SRCS   := $(MPI_DIR)/mpi_intf.c $(CTX_DIR)/mpi_ctx_intf.c $(MPI_DIR)/mpi_rockit.c $(MPI_DIR)/mpi_stub.c $(CTX_DIR)/json/cJSON.c $(CTX_DIR)/mpi_ctx_json.c
 CXX_SRCS := $(STREAM_DIR)/stream_base.cpp $(STREAM_DIR)/stream_pipe.cpp \
