@@ -4,10 +4,14 @@
 #include "stream/stream_listener.hpp"
 
 enum class media_event_type {
-    start_video,
-    stop_video,
-    start_audio,
-    stop_audio,
+    start_video, /* 启动视频流 */
+    assign_video, /* 关联视频通道 */
+    stop_video, /* 停止视频流 */
+    unassign_video, /* 取消关联视频通道 */
+    start_audio, /* 启动音频流 */
+    assign_audio, /* 关联音频通道 */
+    stop_audio, /* 停止音频流 */
+    unassign_audio, /* 取消关联音频通道 */
 };
 
 struct media_event {

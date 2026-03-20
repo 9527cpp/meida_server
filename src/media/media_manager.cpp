@@ -101,37 +101,35 @@ void media_manager::event_loop()
             ev_q_.pop();
         }
 
+        if (ev.chn < 0 || ev.chn >= MAX_CHN) {
+            WriteLog(LOG_ERROR, "invalid channel: chn=%d", ev.chn);
+            continue;
+        }
+
         switch (ev.type) {
         case media_event_type::start_video:
-        {
-            /* 根据 ctx 配置的 venc[].enable 决定是否真正启动 */
-            struct mpi_intf *mpi = mpi_intf_get_instance();
-            struct mpi_ctx *ctx_data = (mpi ? mpi->ctx_data : NULL);
-            if (ev.chn < 0 || ev.chn >= MAX_CHN)
-                break;
-            if (ctx_data && ctx_data->v_ctx.venc[ev.chn].enable == 0) {
-                WriteLog(LOG_DEBUG, "skip start_video: chn=%d enable=0", ev.chn);
-                break;
-            }
-            if (ev.listener)
-                hdmi_video_pipe_->add_listener(ev.chn, ev.listener);
             hdmi_video_pipe_->stream_start(ev.chn);
             break;
-        }
         case media_event_type::stop_video:
-            if (ev.listener)
-                hdmi_video_pipe_->remove_listener(ev.chn, ev.listener);
             hdmi_video_pipe_->stream_stop(ev.chn);
             break;
+        case media_event_type::assign_video:
+            hdmi_video_pipe_->add_listener(ev.chn, ev.listener);
+            break;
+        case media_event_type::unassign_video:
+            hdmi_video_pipe_->remove_listener(ev.chn, ev.listener);
+            break;
         case media_event_type::start_audio:
-            if (ev.listener)
-                hdmi_audio_pipe_->add_listener(ev.chn, ev.listener);
             hdmi_audio_pipe_->stream_start(ev.chn);
             break;
         case media_event_type::stop_audio:
-            if (ev.listener)
-                hdmi_audio_pipe_->remove_listener(ev.chn, ev.listener);
             hdmi_audio_pipe_->stream_stop(ev.chn);
+            break;
+        case media_event_type::assign_audio:
+            hdmi_audio_pipe_->add_listener(ev.chn, ev.listener);
+            break;
+        case media_event_type::unassign_audio:
+            hdmi_audio_pipe_->remove_listener(ev.chn, ev.listener);
             break;
         /* TODO: 其他事件处理 */
         }
@@ -153,22 +151,36 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
     const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
     WriteLog(LOG_INFO, "%s %s", t, e);
 
-    media_event ev_media;
-    ev_media.type = media_event_type::start_video;
-    ev_media.chn = 0;
-    ev_media.listener = nullptr;
+    struct mpi_intf *mpi = mpi_intf_get_instance();
+    struct mpi_ctx *ctx_data = (mpi ? mpi->ctx_data : NULL);
+
     if (type == hw_type::hdmi) {
-        if (ev == hw_event::plug_in) {
-            ev_media.type = media_event_type::start_video;
-        } else {
-            ev_media.type = media_event_type::stop_video;
+        /* HDMI plug_in/out：对所有 enable 的 venc 通道分别 start/stop */
+        for (int i = 0; i < MAX_CHN; i++) {
+            if (ctx_data) {
+                if (ctx_data->v_ctx.venc[i].enable == 0)
+                    continue;
+            }
+
+            media_event ev_media;
+            ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
+                                                      : media_event_type::stop_video;
+            ev_media.chn = i;
+            ev_media.listener = nullptr;
+            post_event(ev_media);
         }
-    } else if (type == hw_type::usb) {
-        if (ev == hw_event::plug_in) {
-            ev_media.type = media_event_type::start_video;
-        } else {
-            ev_media.type = media_event_type::stop_video;
-        }
+        return;
     }
-    post_event(ev_media);
+
+    /* 
+    * TODO:
+    * 其它硬件类型保持现有行为（如需同样批量处理可再继续补齐） 
+    */
+    // media_event ev_media;
+    // ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
+    //                                           : media_event_type::stop_video;
+    // ev_media.chn = 0;
+    // ev_media.listener = nullptr;
+    // post_event(ev_media);
+
 }
