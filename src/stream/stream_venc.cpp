@@ -4,6 +4,10 @@
 #include <cstring>
 #include <unistd.h>
 
+#define MODULE_TAG "STREAM_VENC"
+
+#include "../log/log_tag.h"
+
 stream_venc::stream_venc(int chn)
     : chn_(chn)
 {
@@ -19,7 +23,7 @@ void stream_venc::stream_data_loop()
     int len;
 
     while (is_running()) {
-        printf("[stream_venc] stream_data_loop: %p\n", this);
+        WriteLog(LOG_DEBUG, "[stream_venc] stream_data_loop: %p\n", this);
         len = sizeof(buf);
         if (mpi->video->venc_get_data(&mpi->ctx_data->v_ctx.venc[chn_], buf, &len) == 0 && len > 0)
             notify_listeners(buf, len);

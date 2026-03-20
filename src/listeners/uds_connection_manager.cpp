@@ -1,6 +1,8 @@
 #include "uds_connection_manager.hpp"
 #include "../mpi/mpi_intf.h"
 #include "../mpi_ctx/mpi_ctx_intf.h"
+#define MODULE_TAG "UDS_CONN_MGR"
+#include "../log/log_tag.h"
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <poll.h>
@@ -263,7 +265,7 @@ int uds_connection_manager::start()
     running_ = true;
     accept_thread_ = std::thread(&uds_connection_manager::accept_loop, this);
     cleanup_thread_ = std::thread(&uds_connection_manager::cleanup_loop, this);
-    fprintf(stderr, "[uds_mgr] listening on %s, parse libuds cmd+json (fallback legacy 1-byte media type), channel auto-allocated\n", uds_path_.c_str());
+    WriteLog(LOG_INFO, "[uds_mgr] listening on %s, parse libuds cmd+json (fallback legacy 1-byte media type), channel auto-allocated\n", uds_path_.c_str());
     return 0;
 }
 
@@ -305,7 +307,7 @@ void uds_connection_manager::accept_loop()
 
         connect_request req;
         if (!parse_connect_request(client_fd, REQUEST_READ_TIMEOUT_MS, &req)) {
-            fprintf(stderr, "[uds_mgr] client fd=%d parse request failed or timeout, close\n", client_fd);
+            WriteLog(LOG_ERROR, "[uds_mgr] client fd=%d parse request failed or timeout, close\n", client_fd);
             close(client_fd);
             continue;
         }
@@ -316,7 +318,7 @@ void uds_connection_manager::accept_loop()
             chn = alloc_free_channel_locked(req.type);
         }
         if (chn < 0) {
-            fprintf(stderr, "[uds_mgr] client fd=%d no free channel, close\n", client_fd);
+            WriteLog(LOG_ERROR, "[uds_mgr] client fd=%d no free channel, close\n", client_fd);
             close(client_fd);
             continue;
         }
@@ -330,10 +332,10 @@ void uds_connection_manager::accept_loop()
 
         std::lock_guard<std::mutex> lock(sessions_mutex_);
         sessions_.emplace_back(client_fd, chn, req.type, stream);
-        fprintf(stderr, "[uds_mgr] client fd=%d cmd=%d(%s) chn=%d type=%s json_len=%zu\n",
-                client_fd, req.cmd, cmd_name(req.cmd), chn,
-                req.type == media_type::video ? "video" : "audio",
-                req.json_payload.size());
+        WriteLog(LOG_INFO, "[uds_mgr] client fd=%d cmd=%d(%s) chn=%d type=%s json_len=%zu\n",
+                 client_fd, req.cmd, cmd_name(req.cmd), chn,
+                 req.type == media_type::video ? "video" : "audio",
+                 req.json_payload.size());
     }
 }
 
@@ -375,8 +377,8 @@ void uds_connection_manager::cleanup_loop()
                 }
                 it->stream->set_client_fd(-1);
                 close(it->fd);
-                fprintf(stderr, "[uds_mgr] client fd=%d chn=%d type=%s disconnected\n",
-                        it->fd, it->chn, it->type == media_type::video ? "video" : "audio");
+                WriteLog(LOG_INFO, "[uds_mgr] client fd=%d chn=%d type=%s disconnected\n",
+                         it->fd, it->chn, it->type == media_type::video ? "video" : "audio");
                 sessions_.erase(it);
             }
         }

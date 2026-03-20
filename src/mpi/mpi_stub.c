@@ -15,57 +15,61 @@
 #include "mpi_intf.h"
 #include <stdio.h>
 
+#define MODULE_TAG "MPI_STUB"
+
+#include "../log/log_tag.h"
+
 static int stub_sys_init(void)
 {
-    fprintf(stderr, "[mpi] sys_init\n");
+    WriteLog(LOG_INFO, "[mpi] sys_init\n");
     return 0;
 }
 
 static int stub_sys_deinit(void)
 {
-    fprintf(stderr, "[mpi] sys_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] sys_deinit\n");
     return 0;
 }
 
 static int stub_vi_init(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] vi_init\n");
+    WriteLog(LOG_INFO, "[mpi] vi_init\n");
     return 0;
 }
 
 static int stub_vi_deinit(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] vi_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] vi_deinit\n");
     return 0;
 }
 
 static int stub_vpss_init(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] vpss_init\n");
+    WriteLog(LOG_INFO, "[mpi] vpss_init\n");
     return 0;
 }
 
 static int stub_vpss_deinit(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] vpss_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] vpss_deinit\n");
     return 0;
 }
 
 static int stub_venc_init(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] venc_init\n");
+    WriteLog(LOG_INFO, "[mpi] venc_init\n");
     return 0;
 }
 
 static int stub_venc_deinit(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] venc_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] venc_deinit\n");
     return 0;
 }
 
@@ -83,28 +87,28 @@ static int stub_venc_get_data(void *ctx, void *data, int *len)
 static int stub_ai_init(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] ai_init\n");
+    WriteLog(LOG_INFO, "[mpi] ai_init\n");
     return 0;
 }
 
 static int stub_ai_deinit(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] ai_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] ai_deinit\n");
     return 0;
 }
 
 static int stub_aenc_init(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] aenc_init\n");
+    WriteLog(LOG_INFO, "[mpi] aenc_init\n");
     return 0;
 }
 
 static int stub_aenc_deinit(void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "[mpi] aenc_deinit\n");
+    WriteLog(LOG_INFO, "[mpi] aenc_deinit\n");
     return 0;
 }
 
