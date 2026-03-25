@@ -26,6 +26,7 @@
 #include <thread>
 #include <chrono>
 #include <dlfcn.h>
+#include <getopt.h>
 
 #define MODULE_TAG "main"
 
@@ -45,15 +46,25 @@ static void signal_handler(int)
 
 static void print_usage(const char *prog)
 {
-    WriteLog(LOG_INFO,
-              "Usage: %s [OPTIONS]"
-              "  --mpi <path>    MPI shared library path (e.g. libmpi_rockit.so)"
-              "  --enable-uds    Enable UDS server (multi-client)"
-              "  --enable-file   Write channel 0 encoded video to a file"
-              "  -h, --help      Show this help"
-              "Options --enable-uds and --enable-file are mutually exclusive.",
-              prog);
+    printf("Usage: %s [OPTIONS]\n"
+           "  -m, --mpi <path>    MPI shared library path (e.g. libmpi_rockit.so)\n"
+           "  -c, --cfg <path>    Config file path (default: /tmp/config.json)\n"
+           "  -u, --enable-uds    Enable UDS server (multi-client)\n"
+           "  -f, --enable-file   Write channel 0 encoded video to a file\n"
+           "  -h, --help          Show this help\n"
+           "\n"
+           "Options -u and -f are mutually exclusive.\n",
+           prog);
 }
+
+static const struct option long_options[] = {
+    {"mpi",         required_argument, NULL, 'm'},
+    {"cfg",         required_argument, NULL, 'c'},
+    {"enable-uds",  no_argument,       NULL, 'u'},
+    {"enable-file", no_argument,       NULL, 'f'},
+    {"help",        no_argument,       NULL, 'h'},
+    {NULL,          0,                 NULL,  0 },
+};
 
 int main(int argc, char *argv[])
 {
@@ -62,47 +73,39 @@ int main(int argc, char *argv[])
     std::unique_ptr<file_stream> file_out;
     const char *uds_path = "/tmp/media_server.sock";
     const char *file_path = "/tmp/media_server.out";
-    char cfg_path[256] = "/tmp/config.json";
+    const char *cfg_path = "/tmp/config.json";
     const char *mpi_so_path = NULL;
 
     struct mpi_ctx_intf *ctx_intf = &json_ctx_intf;
     bool enable_uds = false;
     bool enable_file = false;
 
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--mpi") == 0) {
-            if (i + 1 < argc) {
-                mpi_so_path = argv[++i];
-            } else {
-                WriteLog(LOG_ERROR, "--mpi requires a path argument");
-                print_usage(argv[0]);
-                return 1;
-            }
-        } else if (strcmp(argv[i], "--enable-uds") == 0) {
+    int opt;
+    while ((opt = getopt_long(argc, argv, "m:c:ufh", long_options, NULL)) != -1) {
+        switch (opt) {
+        case 'm':
+            mpi_so_path = optarg;
+            break;
+        case 'c':
+            cfg_path = optarg;
+            break;
+        case 'u':
             enable_uds = true;
-        } else if (strcmp(argv[i], "--enable-file") == 0) {
+            break;
+        case 'f':
             enable_file = true;
-        } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            break;
+        case 'h':
             print_usage(argv[0]);
             return 0;
-        } else if (strcmp(argv[i], "--cfg-path") == 0) {
-            if (i + 1 < argc) {
-                strncpy(cfg_path, argv[i + 1], sizeof(cfg_path) - 1);
-                i++;
-            } else {
-                WriteLog(LOG_ERROR, "--cfg-path requires an argument");
-                print_usage(argv[0]);
-                return 1;
-            }
-        } else {
-            WriteLog(LOG_ERROR, "Unknown option: %s", argv[i]);
+        default:
             print_usage(argv[0]);
             return 1;
         }
     }
 
     if (enable_uds && enable_file) {
-        WriteLog(LOG_ERROR, "Error: --enable-uds and --enable-file cannot be used together.");
+        WriteLog(LOG_ERROR, "--enable-uds and --enable-file cannot be used together.");
         print_usage(argv[0]);
         return 1;
     }
