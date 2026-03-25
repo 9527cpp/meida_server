@@ -121,12 +121,12 @@ static int rockit_aenc_get_data(void *ctx, void *data, int *len)
 }
 
 
-struct mpi_sys_opt rockit_sys_opt = {
+static struct mpi_sys_opt rockit_sys_opt = {
     .sys_init = rockit_sys_init,
     .sys_deinit = rockit_sys_deinit,
 };
 
-struct mpi_video_opt rockit_video_opt = {
+static struct mpi_video_opt rockit_video_opt = {
     .vi_init = rockit_vi_init,
     .vi_deinit = rockit_vi_deinit,
     .vpss_init = rockit_vpss_init,
@@ -136,7 +136,7 @@ struct mpi_video_opt rockit_video_opt = {
     .venc_get_data = rockit_venc_get_data,
 };
 
-struct mpi_audio_opt rockit_audio_opt = {
+static struct mpi_audio_opt rockit_audio_opt = {
     .ai_init = rockit_ai_init,
     .ai_deinit = rockit_ai_deinit,
     .aenc_init = rockit_aenc_init,
@@ -144,8 +144,13 @@ struct mpi_audio_opt rockit_audio_opt = {
     .aenc_get_data = rockit_aenc_get_data,
 };
 
-struct mpi_intf rockit_mpi = {
+static struct mpi_intf rockit_mpi = {
     .sys = &rockit_sys_opt,
     .video = &rockit_video_opt,
     .audio = &rockit_audio_opt,
 };
+
+struct mpi_intf *mpi_intf_create(void)
+{
+    return &rockit_mpi;
+}

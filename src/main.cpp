@@ -4,6 +4,7 @@
  * 默认：不创建 UDS、不写文件，仅初始化 media_manager 后空转（可用于纯 MPI/检测场景）。
  *
  * 参数：
+ *   --mpi <path>   指定平台 MPI 动态库路径（如 libmpi_rockit.so）
  *   --enable-uds   启用 Unix socket 多客户端（默认 /tmp/media_server.sock）
  *   --enable-file  将通道 0 视频码流写入文件（默认 /tmp/media_server.out）
  *   -h, --help     打印帮助
@@ -24,13 +25,12 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <dlfcn.h>
 
-// module log tag
 #define MODULE_TAG "main"
 
 #include "log/log_tag.h"
 
-extern struct mpi_intf rockit_mpi;
 extern struct mpi_ctx_intf json_ctx_intf;
 extern "C" {
     extern struct mpi_ctx *default_ctx(void);
@@ -47,6 +47,7 @@ static void print_usage(const char *prog)
 {
     WriteLog(LOG_INFO,
               "Usage: %s [OPTIONS]"
+              "  --mpi <path>    MPI shared library path (e.g. libmpi_rockit.so)"
               "  --enable-uds    Enable UDS server (multi-client)"
               "  --enable-file   Write channel 0 encoded video to a file"
               "  -h, --help      Show this help"
@@ -62,16 +63,22 @@ int main(int argc, char *argv[])
     const char *uds_path = "/tmp/media_server.sock";
     const char *file_path = "/tmp/media_server.out";
     char cfg_path[256] = "/tmp/config.json";
+    const char *mpi_so_path = NULL;
 
-    // 可替换为其它 MPI 实现
-    static struct mpi_intf *mpi = &rockit_mpi;
-    // 可替换为其它 ctx 实现
     struct mpi_ctx_intf *ctx_intf = &json_ctx_intf;
     bool enable_uds = false;
     bool enable_file = false;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--enable-uds") == 0) {
+        if (strcmp(argv[i], "--mpi") == 0) {
+            if (i + 1 < argc) {
+                mpi_so_path = argv[++i];
+            } else {
+                WriteLog(LOG_ERROR, "--mpi requires a path argument");
+                print_usage(argv[0]);
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--enable-uds") == 0) {
             enable_uds = true;
         } else if (strcmp(argv[i], "--enable-file") == 0) {
             enable_file = true;
@@ -100,8 +107,36 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if (!mpi_so_path) {
+        WriteLog(LOG_ERROR, "--mpi <path> is required (e.g. --mpi ./libmpi_stub.so)");
+        print_usage(argv[0]);
+        return 1;
+    }
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
+
+    void *mpi_handle = dlopen(mpi_so_path, RTLD_NOW);
+    if (!mpi_handle) {
+        WriteLog(LOG_ERROR, "dlopen(%s) failed: %s", mpi_so_path, dlerror());
+        return 1;
+    }
+
+    mpi_intf_create_fn create_fn =
+        (mpi_intf_create_fn)dlsym(mpi_handle, MPI_INTF_CREATE_SYMBOL);
+    if (!create_fn) {
+        WriteLog(LOG_ERROR, "dlsym(%s) failed: %s", MPI_INTF_CREATE_SYMBOL, dlerror());
+        dlclose(mpi_handle);
+        return 1;
+    }
+
+    struct mpi_intf *mpi = create_fn();
+    if (!mpi) {
+        WriteLog(LOG_ERROR, "mpi_intf_create() returned NULL");
+        dlclose(mpi_handle);
+        return 1;
+    }
+    WriteLog(LOG_INFO, "loaded MPI from %s", mpi_so_path);
 
     struct mpi_ctx *ctx_data = ctx_intf->load(cfg_path);
     if (!ctx_data) {
@@ -154,6 +189,11 @@ int main(int argc, char *argv[])
     }
 
     mpi_intf_deinit(mpi);
+
+    if (mpi_handle) {
+        dlclose(mpi_handle);
+        mpi_handle = NULL;
+    }
 
     WriteLog(LOG_INFO, "exit");
     return 0;

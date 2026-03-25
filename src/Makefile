@@ -19,7 +19,7 @@ LOG_DIR    := $(SRC_DIR)/log
 
 INCLUDES := -I$(SRC_DIR) -I$(MPI_DIR) -I$(CTX_DIR) -I$(STREAM_DIR) -I$(LISTEN_DIR) -I$(HW_DIR) -I$(MEDIA_DIR) -I$(LOG_DIR)
 
-C_SRCS   := $(MPI_DIR)/mpi_intf.c $(CTX_DIR)/mpi_ctx_intf.c $(MPI_DIR)/mpi_rockit.c $(MPI_DIR)/mpi_stub.c $(CTX_DIR)/json/cJSON.c $(CTX_DIR)/mpi_ctx_json.c
+C_SRCS   := $(MPI_DIR)/mpi_intf.c $(CTX_DIR)/mpi_ctx_intf.c $(CTX_DIR)/json/cJSON.c $(CTX_DIR)/mpi_ctx_json.c
 CXX_SRCS := $(STREAM_DIR)/stream_base.cpp $(STREAM_DIR)/stream_pipe.cpp \
             $(STREAM_DIR)/stream_vi.cpp $(STREAM_DIR)/stream_venc.cpp \
             $(STREAM_DIR)/stream_ai.cpp $(STREAM_DIR)/stream_aenc.cpp \
@@ -35,18 +35,24 @@ LIB  := $(BUILD_DIR)/libmedia_server.a
 MAIN_OBJ := $(BUILD_DIR)/main.o
 BIN  := $(BUILD_DIR)/media-server
 
-.PHONY: all clean bin
+# 平台 MPI 动态库（每个平台一个 .so）
+SO_ROCKIT := $(BUILD_DIR)/libmpi_rockit.so
+SO_STUB   := $(BUILD_DIR)/libmpi_stub.so
+MPI_SOLIBS := $(SO_ROCKIT) $(SO_STUB)
 
+.PHONY: all clean bin so
 
-bin: $(LIB) $(BIN)
+bin: $(LIB) $(BIN) $(MPI_SOLIBS)
 
-all: $(BIN)
+all: $(BIN) $(MPI_SOLIBS)
+
+so: $(MPI_SOLIBS)
 
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $^
 
 $(BIN): $(LIB) $(MAIN_OBJ) 
-	$(CXX) $(CXXFLAGS) -o $@ $(MAIN_OBJ) $(LIB) -lpthread
+	$(CXX) $(CXXFLAGS) -o $@ $(MAIN_OBJ) $(LIB) -lpthread -ldl
  
 $(MAIN_OBJ): main.cpp
 	@mkdir -p $(dir $@)
@@ -59,6 +65,12 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c -o $@ $<
+
+$(SO_ROCKIT): $(BUILD_DIR)/$(MPI_DIR)/mpi_rockit.o
+	$(CC) -shared -o $@ $<
+
+$(SO_STUB): $(BUILD_DIR)/$(MPI_DIR)/mpi_stub.o
+	$(CC) -shared -o $@ $<
 
 clean:
 	rm -rf $(BUILD_DIR)

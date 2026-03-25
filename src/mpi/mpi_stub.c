@@ -121,12 +121,12 @@ static int stub_aenc_get_data(void *ctx, void *data, int *len)
 }
 
 
-struct mpi_sys_opt stub_sys_opt = {
+static struct mpi_sys_opt stub_sys_opt = {
     .sys_init = stub_sys_init,
     .sys_deinit = stub_sys_deinit,
 };
 
-struct mpi_video_opt stub_video_opt = {
+static struct mpi_video_opt stub_video_opt = {
     .vi_init = stub_vi_init,
     .vi_deinit = stub_vi_deinit,
     .vpss_init = stub_vpss_init,
@@ -136,7 +136,7 @@ struct mpi_video_opt stub_video_opt = {
     .venc_get_data = stub_venc_get_data,
 };
 
-struct mpi_audio_opt stub_audio_opt = {
+static struct mpi_audio_opt stub_audio_opt = {
     .ai_init = stub_ai_init,
     .ai_deinit = stub_ai_deinit,
     .aenc_init = stub_aenc_init,
@@ -144,8 +144,13 @@ struct mpi_audio_opt stub_audio_opt = {
     .aenc_get_data = stub_aenc_get_data,
 };
 
-struct mpi_intf stub_mpi = {
+static struct mpi_intf stub_mpi = {
     .sys = &stub_sys_opt,
     .video = &stub_video_opt,
     .audio = &stub_audio_opt,
 };
+
+struct mpi_intf *mpi_intf_create(void)
+{
+    return &stub_mpi;
+}

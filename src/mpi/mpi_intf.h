@@ -44,6 +44,13 @@ struct mpi_intf {
     struct mpi_audio_opt *audio;
 };
 
+/*
+ * 动态库导出约定：每个平台 .so 须导出此符号，返回该平台的 mpi_intf 实例。
+ * main 通过 dlsym(handle, MPI_INTF_CREATE_SYMBOL) 获取此函数指针后调用。
+ */
+#define MPI_INTF_CREATE_SYMBOL "mpi_intf_create"
+typedef struct mpi_intf *(*mpi_intf_create_fn)(void);
+
 /* 注册MPI接口实例 */
 int mpi_intf_register(struct mpi_intf *mpi);
 
