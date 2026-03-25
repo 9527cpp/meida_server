@@ -1,4 +1,4 @@
-#include "stream_pipe.hpp"
+#include "stream_base.hpp"
 #include "mpi/mpi_intf.h"
 #include "mpi_ctx/mpi_ctx_intf.h"
 #include <cstring>

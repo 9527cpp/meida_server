@@ -1,4 +1,4 @@
-#include "stream_pipe.hpp"
+#include "stream_base.hpp"
 #include <unistd.h>
 #define MODULE_TAG "stream_vi"
 
