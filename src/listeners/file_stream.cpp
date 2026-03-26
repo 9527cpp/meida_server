@@ -16,7 +16,7 @@ file_stream::~file_stream()
     }
 }
 
-void file_stream::on_stream_data(const char *data, int len)
+void file_stream::on_data_input(const char *data, int len)
 {
     if (!fp_ || len <= 0)
         return;

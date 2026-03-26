@@ -10,7 +10,7 @@ public:
     explicit uds_stream(int client_fd = -1);
     ~uds_stream() override;
     void set_client_fd(int fd) { fd_ = fd; }
-    void on_stream_data(const char *data, int len) override;
+    void on_data_input(const char *data, int len) override;
 
 private:
     int fd_;

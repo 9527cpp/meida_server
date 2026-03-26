@@ -91,6 +91,24 @@ void stream_base::stream_del_connect(stream_base *downstream)
         connects_.erase(it);
 }
 
+void stream_base::add_stream(stream_base *downstream)
+{
+    stream_add_connect(downstream);
+}
+
+void stream_base::on_data_input(const char *data, int len)
+{
+    on_data_output(data, len);
+    notify_listeners(data, len);
+    notify_connects(data, len);
+}
+
+void stream_base::on_data_output(const char *data, int len)
+{
+    (void)data;
+    (void)len;
+}
+
 // 每个 stream 实现自己的 stream_data_loop 中会调用 notify_listeners 通知每个 listeners 的 on_stream_data
 void stream_base::notify_listeners(const char *data, int len)
 {
@@ -102,6 +120,19 @@ void stream_base::notify_listeners(const char *data, int len)
     for (auto *l : copy) {
         WriteLog(LOG_DEBUG, "notify_listeners: %p listener=%p", this, l);
         l->on_stream_data(data, len);
+    }
+}
+
+void stream_base::notify_connects(const char *data, int len)
+{
+    std::vector<stream_base *> copy;
+    {
+        std::lock_guard<std::mutex> lock(connects_mutex_);
+        copy = connects_;
+    }
+    for (auto *c : copy) {
+        WriteLog(LOG_DEBUG, "notify_connects: %p connect=%p", this, c);
+        c->on_data_input(data, len);
     }
 }
 

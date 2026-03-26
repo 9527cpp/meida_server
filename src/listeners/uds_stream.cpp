@@ -18,7 +18,7 @@ uds_stream::~uds_stream()
     }
 }
 
-void uds_stream::on_stream_data(const char *data, int len)
+void uds_stream::on_data_input(const char *data, int len)
 {
     if (fd_ < 0 || len <= 0)
         return;

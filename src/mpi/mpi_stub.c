@@ -45,6 +45,13 @@ static int stub_vi_deinit(void *ctx)
     return 0;
 }
 
+static void stub_vi_release_data(void *ctx, void *data, int len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
+}
+
 static int stub_vpss_init(void *ctx)
 {
     (void)ctx;
@@ -57,6 +64,21 @@ static int stub_vpss_deinit(void *ctx)
     (void)ctx;
     WriteLog(LOG_INFO, "vpss_deinit");
     return 0;
+}
+
+static int stub_vpss_get_data(void *ctx, void *data, int *len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
+    return -1;
+}
+
+static void stub_vpss_release_data(void *ctx, void *data, int len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
 }
 
 static int stub_venc_init(void *ctx)
@@ -81,6 +103,14 @@ static int stub_venc_get_data(void *ctx, void *data, int *len)
     (void)len;
     //return -1;
     *len = 100;
+    return 0;
+}
+
+static int stub_venc_release_data(void *ctx, void *data, int len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
     return 0;
 }
 
@@ -120,6 +150,21 @@ static int stub_aenc_get_data(void *ctx, void *data, int *len)
     return -1;
 }
 
+static void stub_ai_release_data(void *ctx, void *data, int len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
+}
+
+static int stub_aenc_release_data(void *ctx, void *data, int len)
+{
+    (void)ctx;
+    (void)data;
+    (void)len;
+    return 0;
+}
+
 
 static struct mpi_sys_opt stub_sys_opt = {
     .sys_init = stub_sys_init,
@@ -129,19 +174,25 @@ static struct mpi_sys_opt stub_sys_opt = {
 static struct mpi_video_opt stub_video_opt = {
     .vi_init = stub_vi_init,
     .vi_deinit = stub_vi_deinit,
+    .vi_release_data = stub_vi_release_data,
     .vpss_init = stub_vpss_init,
     .vpss_deinit = stub_vpss_deinit,
+    .vpss_get_data = stub_vpss_get_data,
+    .vpss_release_data = stub_vpss_release_data,
     .venc_init = stub_venc_init,
     .venc_deinit = stub_venc_deinit,
     .venc_get_data = stub_venc_get_data,
+    .venc_release_data = stub_venc_release_data,
 };
 
 static struct mpi_audio_opt stub_audio_opt = {
     .ai_init = stub_ai_init,
     .ai_deinit = stub_ai_deinit,
+    .ai_release_data = stub_ai_release_data,
     .aenc_init = stub_aenc_init,
     .aenc_deinit = stub_aenc_deinit,
     .aenc_get_data = stub_aenc_get_data,
+    .aenc_release_data = stub_aenc_release_data,
 };
 
 static struct mpi_intf stub_mpi = {

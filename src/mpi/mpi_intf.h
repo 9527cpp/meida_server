@@ -17,20 +17,31 @@ struct mpi_sys_opt {
 struct mpi_video_opt {
     int (*vi_init)(void *ctx);
     int (*vi_deinit)(void *ctx);
+    int (*vi_get_data)(void *ctx, void *data, int *len);
+    void(*vi_release_data)(void *ctx, void *data, int len);
+
     int (*vpss_init)(void *ctx);
     int (*vpss_deinit)(void *ctx);
+    int (*vpss_get_data)(void *ctx, void *data, int *len);
+    void(*vpss_release_data)(void *ctx, void *data, int len);
+
     int (*venc_init)(void *ctx);
     int (*venc_deinit)(void *ctx);
     int (*venc_get_data)(void *ctx, void *data, int *len);
+    int (*venc_release_data)(void *ctx, void *data, int len);
 };
 
 /* 音频操作接口 */
 struct mpi_audio_opt {
     int (*ai_init)(void *ctx);
     int (*ai_deinit)(void *ctx);
+    int (*ai_get_data)(void *ctx, void *data, int *len);
+    void(*ai_release_data)(void *ctx, void *data, int len);
+
     int (*aenc_init)(void *ctx);
     int (*aenc_deinit)(void *ctx);
     int (*aenc_get_data)(void *ctx, void *data, int *len);
+    int (*aenc_release_data)(void *ctx, void *data, int len);
 };
 
 /* MPI接口上下文 */

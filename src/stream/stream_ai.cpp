@@ -1,4 +1,4 @@
-#include "stream_pipe.hpp"
+#include "stream_base.hpp"
 #include <unistd.h>
 
 stream_ai::stream_ai()

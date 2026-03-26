@@ -10,7 +10,7 @@ class file_stream : public stream_listener {
 public:
     explicit file_stream(const std::string &path);
     ~file_stream() override;
-    void on_stream_data(const char *data, int len) override;
+    void on_data_input(const char *data, int len) override;
 
 private:
     std::string path_;

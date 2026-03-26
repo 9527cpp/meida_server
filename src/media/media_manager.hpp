@@ -6,7 +6,8 @@
 #include <mutex>
 #include <queue>
 
-#include "stream/stream_pipe.hpp"
+#include "stream/stream_hdmi_video.hpp"
+#include "stream/stream_hdmi_audio.hpp"
 #include "stream/stream_listener.hpp"
 #include "hw_check/hw_check.hpp"
 #include "media_events.hpp"
@@ -33,10 +34,10 @@ private:
     void event_loop();
 
     /* 各路pipe流 */
-    std::unique_ptr<stream_pipe> hdmi_video_pipe_;
-    std::unique_ptr<stream_pipe> hdmi_audio_pipe_;
-    std::unique_ptr<stream_pipe> usb_video_pipe_;
-    std::unique_ptr<stream_pipe> mic_audio_pipe_;
+    std::unique_ptr<stream_hdmi_video> hdmi_video_pipe_;
+    std::unique_ptr<stream_hdmi_audio> hdmi_audio_pipe_;
+    // std::unique_ptr<stream_hdmi_video> usb_video_pipe_;
+    // std::unique_ptr<stream_hdmi_audio> mic_audio_pipe_;
 
     /* 硬件检测 */
     std::unique_ptr<hw_check> hdmi_check_;

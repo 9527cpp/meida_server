@@ -78,17 +78,17 @@ void media_manager::event_loop()
             ev_q_.pop();
         }
 
-        if (ev.chn < 0 || ev.chn >= MAX_CHN) {
+        if (ev.chn < 0 || ev.chn >= MAX_VENC_CHN) {
             WriteLog(LOG_ERROR, "invalid channel: chn=%d", ev.chn);
             continue;
         }
 
         switch (ev.type) {
         case media_event_type::start_video:
-            hdmi_video_pipe_->stream_start(ev.chn);
+            hdmi_video_pipe_->start(ev.chn);
             break;
         case media_event_type::stop_video:
-            hdmi_video_pipe_->stream_stop(ev.chn);
+            hdmi_video_pipe_->stop(ev.chn);
             break;
         case media_event_type::assign_video:
             hdmi_video_pipe_->add_listener(ev.chn, ev.listener);
@@ -97,10 +97,10 @@ void media_manager::event_loop()
             hdmi_video_pipe_->remove_listener(ev.chn, ev.listener);
             break;
         case media_event_type::start_audio:
-            hdmi_audio_pipe_->stream_start(ev.chn);
+            hdmi_audio_pipe_->start(ev.chn);
             break;
         case media_event_type::stop_audio:
-            hdmi_audio_pipe_->stream_stop(ev.chn);
+            hdmi_audio_pipe_->stop(ev.chn);
             break;
         case media_event_type::assign_audio:
             hdmi_audio_pipe_->add_listener(ev.chn, ev.listener);
@@ -130,7 +130,7 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
 
     if (type == hw_type::hdmi) {
         /* HDMI plug_in/out：对所有 enable 的 venc 通道分别 start/stop */
-        for (int i = 0; i < MAX_CHN; i++) {
+        for (int i = 0; i < MAX_VENC_CHN; i++) {
             media_event ev_media;
             ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
                                                       : media_event_type::stop_video;

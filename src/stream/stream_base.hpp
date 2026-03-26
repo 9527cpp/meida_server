@@ -21,7 +21,7 @@ enum stream_type {
 };
 
 /* 基本流：负责 MPI 取数线程、监听者列表、启停 */
-class stream_base {
+class stream_base : public stream_listener {
 public:
     stream_base();
     virtual ~stream_base();
@@ -42,13 +42,21 @@ public:
     void stream_add_connect(stream_base *downstream);
     void stream_del_connect(stream_base *downstream);
 
+    /* 动态添加下游节点（用于 stream_hdmi_video 等动态构建场景） */
+    void add_stream(stream_base *downstream);
+
     stream_status get_status() const { return status_.load(); }
+
+    /* stream_listener 接口实现 */
+    void on_data_input(const char *data, int len) override;
+    void on_data_output(const char *data, int len) override;
 
 protected:
     /* 子类实现：从 MPI 取数据并通知监听者 */
     virtual void stream_data_loop() = 0;
 
     void notify_listeners(const char *data, int len);
+    void notify_connects(const char *data, int len);
     bool is_running() const { return running_.load(); }
 
 private:
@@ -65,7 +73,7 @@ private:
     std::atomic<bool> running_;
 };
 
-/* 视频输入流：VI 数据源，可作为 pipe 的 head */
+/* 视频输入流：VI 数据源 */
 class stream_vi : public stream_base {
 public:
     stream_vi();
@@ -88,7 +96,7 @@ private:
 };
 
 
-/* 音频输入流：AI 数据源，占位；当前编码节点直接从 MPI AENC 拉取数据 */
+/* 音频输入流：AI 数据源 */
 class stream_ai : public stream_base {
 public:
     stream_ai();

@@ -216,7 +216,9 @@ int uds_connection_manager::alloc_free_channel_locked(media_type type) const
     struct mpi_intf *mpi = mpi_intf_get_instance();
     struct mpi_ctx *ctx_data = mpi ? mpi->ctx_data : NULL;
 
-    for (int chn = 0; chn < MAX_CHN; chn++) {
+    int max_chn = (type == media_type::video) ? MAX_VENC_CHN : MAX_AENC_CHN;
+
+    for (int chn = 0; chn < max_chn; chn++) {
         if (type == media_type::video && ctx_data) {
             if (ctx_data->v_ctx.venc[chn].enable == 0)
                 continue;
