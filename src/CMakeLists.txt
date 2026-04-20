@@ -56,7 +56,7 @@ target_include_directories(media_server PUBLIC
 
 # MPI rockit
 add_library(mpi_rockit SHARED ${MPI_DIR}/rockit/mpi_rockit.c)
-target_include_directories(mpi_rockit PUBLIC ${CMAKE_SOURCE_DIR} ${MPI_DIR} ${LOG_DIR})
+target_include_directories(mpi_rockit PUBLIC ${CMAKE_SOURCE_DIR} ${MPI_DIR} ${LOG_DIR} ${MPI_DIR}/rockit/inc)
 set_target_properties(mpi_rockit PROPERTIES OUTPUT_NAME "libmpi_rockit" PREFIX "")
 
 # 可执行文件
