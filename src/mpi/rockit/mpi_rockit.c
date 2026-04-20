@@ -33,6 +33,8 @@
 #include "rk_mpi_mb.h"
 #include "rk_defines.h"
 
+
+#define MPI_WITH_VIRTUAL_PIPE
 // #include <alsa/asoundlib.h>  /* TODO: re-enable when alsa available */
 
 /* VENC 通道私有数据 */
@@ -92,6 +94,7 @@ static int rockit_vi_init(void *ctx)
     int pipe_id = vi->pipeid;
     int chn_id = vi->chn_index;
 
+#ifndef MPI_WITH_VIRTUAL_PIPE
     /* 获取并设置 Dev 属性 */
     VI_DEV_ATTR_S stDevAttr;
     memset(&stDevAttr, 0, sizeof(stDevAttr));
@@ -116,7 +119,7 @@ static int rockit_vi_init(void *ctx)
         /* 绑定 Dev 和 Pipe */
         VI_DEV_BIND_PIPE_S stBindPipe;
         memset(&stBindPipe, 0, sizeof(stBindPipe));
-        stBindPipe.u32Num = 1;
+        stBindPipe.u32Num = pipe_id;
         stBindPipe.PipeId[0] = pipe_id;
         ret = RK_MPI_VI_SetDevBindPipe(dev_id, &stBindPipe);
         if (ret != RK_SUCCESS) {
@@ -124,10 +127,13 @@ static int rockit_vi_init(void *ctx)
             return -1;
         }
     }
+#endif
 
     /* 设置通道属性 */
     VI_CHN_ATTR_S stChnAttr;
     memset(&stChnAttr, 0, sizeof(stChnAttr));
+
+    strcpy(stChnAttr.stIspOpt.aEntityName, vi->entity_name);
     stChnAttr.stIspOpt.u32BufCount = vi->buf_cnt > 0 ? vi->buf_cnt : 3;
     stChnAttr.stIspOpt.enMemoryType = (enum rkVI_V4L2_MEMORY_TYPE)vi->memory_type;
     stChnAttr.stIspOpt.bNoUseLibV4L2 = (RK_BOOL)1;
@@ -163,7 +169,10 @@ static int rockit_vi_deinit(void *ctx)
     }
 
     RK_MPI_VI_DisableChn(vi->devid, vi->chn_index);
+
+#ifndef MPI_WITH_VIRTUAL_PIPE
     RK_MPI_VI_DisableDev(vi->devid);
+#endif
 
     WriteLog(LOG_INFO, "vi_deinit OK (dev=%d, chn=%d)", vi->devid, vi->chn_index);
     return 0;

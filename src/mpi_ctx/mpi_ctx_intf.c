@@ -13,10 +13,10 @@ struct mpi_ctx *default_ctx(void)
         return NULL;
 
     /* VI 默认：1920x1080@25fps, channel0, enable */
-    ctx->v_ctx.vi[0].devid = 0;
-    ctx->v_ctx.vi[0].pipeid = 0;
+    ctx->v_ctx.vi[0].devid = 8;
+    ctx->v_ctx.vi[0].pipeid = 8;
     ctx->v_ctx.vi[0].chn_index = 0;
-    ctx->v_ctx.vi[0].entity_name = NULL;
+    ctx->v_ctx.vi[0].entity_name = "/dev/video0";
     ctx->v_ctx.vi[0].format = 0;
     ctx->v_ctx.vi[0].width = 1920;
     ctx->v_ctx.vi[0].height = 1080;
@@ -28,7 +28,7 @@ struct mpi_ctx *default_ctx(void)
     ctx->v_ctx.vi_cfg_count = 1;
 
     /* VENC 默认：字段尽量对齐 /tmp/config.json */
-    for (int i = 0; i < MAX_VENC_CHN; i++) {
+    for (int i = 0; i < 1; i++) {
         ctx->v_ctx.venc[i].chn_index = i;
         ctx->v_ctx.venc[i].type = strdup("h264");
         ctx->v_ctx.venc[i].enable = true;
@@ -65,7 +65,7 @@ struct mpi_ctx *default_ctx(void)
         ctx->v_ctx.venc[i].full_range_flag = 0;
     }
 
-    ctx->v_ctx.venc_cfg_count = MAX_VENC_CHN;
+    ctx->v_ctx.venc_cfg_count = 1;
 
     /* audio 默认 */
     ctx->a_ctx.ai[0].chn = 0;
@@ -74,12 +74,12 @@ struct mpi_ctx *default_ctx(void)
     ctx->a_ctx.ai[0].bit = 16;
     ctx->a_ctx.ai_cfg_count = 1;
 
-    for (int i = 0; i < MAX_AENC_CHN; i++) {
+    for (int i = 0; i < 1; i++) {
         ctx->a_ctx.aenc[i].chn = i;
         ctx->a_ctx.aenc[i].buf_time = 100;
         ctx->a_ctx.aenc[i].period = 1024;
     }
-    ctx->a_ctx.aenc_cfg_count = MAX_AENC_CHN;
+    ctx->a_ctx.aenc_cfg_count = 1;
 
     return ctx;
 }
