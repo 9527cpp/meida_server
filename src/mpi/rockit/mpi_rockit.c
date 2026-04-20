@@ -13,12 +13,12 @@
  */
 
 #include "mpi_intf.h"
+#include "mpi_ctx/mpi_ctx_intf.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <sys/time.h>
 
 #define MODULE_TAG "mpi_rockit"
 
@@ -31,67 +31,37 @@
 #include "rk_mpi_vi.h"
 #include "rk_mpi_venc.h"
 #include "rk_mpi_mb.h"
-#include "rk_mpi_ai.h"
 #include "rk_defines.h"
 
 #include <alsa/asoundlib.h>
 
-/* 视频分辨率配置 */
-#define VIDEO_WIDTH  1920
-#define VIDEO_HEIGHT 1080
-#define VIDEO_BITRATE 4096
-#define VIDEO_GOP    50
-#define VIDEO_FRAMERATE 25
-
-/* 音频配置 */
-#define AUDIO_SAMPLE_RATE 48000
-#define AUDIO_CHANNELS 1
-#define AUDIO_PERIOD_SIZE 1024
-
-/* VI 上下文 */
+/* VENC 通道私有数据 */
 typedef struct {
-    int dev_id;
-    int pipe_id;
-    int chn_id;
     int venc_chn;
     int initialized;
-} rockit_vi_ctx;
-
-/* VENC 上下文 */
-typedef struct {
-    int chn_id;
-    int initialized;
     pthread_mutex_t mutex;
-} rockit_venc_ctx;
+} rockit_venc_priv;
 
-/* AI 上下文 */
+/* AI 通道私有数据 */
 typedef struct {
     snd_pcm_t *pcm;
     snd_pcm_hw_params_t *hw_params;
     int initialized;
     pthread_mutex_t mutex;
-} rockit_ai_ctx;
+} rockit_ai_priv;
 
-/* 全局上下文 */
-typedef struct {
-    rockit_vi_ctx vi;
-    rockit_venc_ctx venc;
-    rockit_ai_ctx ai;
-    int sys_init;
-} rockit_global_ctx;
-
-static rockit_global_ctx g_ctx = {0};
+static int g_sys_init = 0;
 
 /* 系统初始化 */
 static int rockit_sys_init(void)
 {
-    if (g_ctx.sys_init) {
+    if (g_sys_init) {
         WriteLog(LOG_WARNING, "sys already initialized");
         return 0;
     }
 
     RK_MPI_SYS_Init();
-    g_ctx.sys_init = 1;
+    g_sys_init = 1;
     WriteLog(LOG_INFO, "sys_init OK");
     return 0;
 }
@@ -99,12 +69,12 @@ static int rockit_sys_init(void)
 /* 系统反初始化 */
 static int rockit_sys_deinit(void)
 {
-    if (!g_ctx.sys_init) {
+    if (!g_sys_init) {
         return 0;
     }
 
     RK_MPI_SYS_Exit();
-    g_ctx.sys_init = 0;
+    g_sys_init = 0;
     WriteLog(LOG_INFO, "sys_deinit OK");
     return 0;
 }
@@ -112,17 +82,15 @@ static int rockit_sys_deinit(void)
 /* VI 初始化 */
 static int rockit_vi_init(void *ctx)
 {
-    (void)ctx;
-
-    if (g_ctx.vi.initialized) {
-        WriteLog(LOG_WARNING, "vi already initialized");
+    struct vi_ctx *vi = (struct vi_ctx *)ctx;
+    if (!vi || !vi->enable) {
         return 0;
     }
 
     int ret;
-    int dev_id = 0;
-    int pipe_id = 0;
-    int chn_id = 0;
+    int dev_id = vi->devid;
+    int pipe_id = vi->pipeid;
+    int chn_id = vi->chn_index;
 
     /* 获取并设置 Dev 属性 */
     VI_DEV_ATTR_S stDevAttr;
@@ -160,12 +128,12 @@ static int rockit_vi_init(void *ctx)
     /* 设置通道属性 */
     VI_CHN_ATTR_S stChnAttr;
     memset(&stChnAttr, 0, sizeof(stChnAttr));
-    stChnAttr.stIspOpt.u32BufCount = 3;
-    stChnAttr.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_MMAP;
+    stChnAttr.stIspOpt.u32BufCount = vi->buf_cnt > 0 ? vi->buf_cnt : 3;
+    stChnAttr.stIspOpt.enMemoryType = (enum rkVI_V4L2_MEMORY_TYPE)vi->memory_type;
     stChnAttr.stIspOpt.bNoUseLibV4L2 = (RK_BOOL)1;
-    stChnAttr.enPixelFormat = RK_FMT_YUV420SP;
-    stChnAttr.stSize.u32Width = VIDEO_WIDTH;
-    stChnAttr.stSize.u32Height = VIDEO_HEIGHT;
+    stChnAttr.enPixelFormat = (PIXEL_FORMAT_E)vi->format;
+    stChnAttr.stSize.u32Width = vi->width;
+    stChnAttr.stSize.u32Height = vi->height;
     stChnAttr.enCompressMode = COMPRESS_MODE_NONE;
     stChnAttr.u32Depth = 1;
 
@@ -181,29 +149,23 @@ static int rockit_vi_init(void *ctx)
         return -1;
     }
 
-    g_ctx.vi.dev_id = dev_id;
-    g_ctx.vi.pipe_id = pipe_id;
-    g_ctx.vi.chn_id = chn_id;
-    g_ctx.vi.initialized = 1;
-
-    WriteLog(LOG_INFO, "vi_init OK (dev=%d, pipe=%d, chn=%d)", dev_id, pipe_id, chn_id);
+    WriteLog(LOG_INFO, "vi_init OK (dev=%d, pipe=%d, chn=%d, %dx%d)",
+             dev_id, pipe_id, chn_id, vi->width, vi->height);
     return 0;
 }
 
 /* VI 反初始化 */
 static int rockit_vi_deinit(void *ctx)
 {
-    (void)ctx;
-
-    if (!g_ctx.vi.initialized) {
+    struct vi_ctx *vi = (struct vi_ctx *)ctx;
+    if (!vi || !vi->enable) {
         return 0;
     }
 
-    RK_MPI_VI_DisableChn(g_ctx.vi.dev_id, g_ctx.vi.chn_id);
-    RK_MPI_VI_DisableDev(g_ctx.vi.dev_id);
+    RK_MPI_VI_DisableChn(vi->devid, vi->chn_index);
+    RK_MPI_VI_DisableDev(vi->devid);
 
-    memset(&g_ctx.vi, 0, sizeof(g_ctx.vi));
-    WriteLog(LOG_INFO, "vi_deinit OK");
+    WriteLog(LOG_INFO, "vi_deinit OK (dev=%d, chn=%d)", vi->devid, vi->chn_index);
     return 0;
 }
 
@@ -251,45 +213,88 @@ static void rockit_vpss_release_data(void *ctx, void *data, int len)
 /* VENC 初始化 */
 static int rockit_venc_init(void *ctx)
 {
-    (void)ctx;
-
-    if (g_ctx.venc.initialized) {
-        WriteLog(LOG_WARNING, "venc already initialized");
+    struct venc_ctx *venc = (struct venc_ctx *)ctx;
+    if (!venc || !venc->enable) {
         return 0;
     }
 
     int ret;
-    int venc_chn = 0;
+    int venc_chn = venc->chn_index;
 
     /* 创建编码通道属性 */
     VENC_CHN_ATTR_S stChnAttr;
     memset(&stChnAttr, 0, sizeof(stChnAttr));
 
-    stChnAttr.stVencAttr.enType = RK_VIDEO_ID_AVC;
-    stChnAttr.stVencAttr.enPixelFormat = RK_FMT_YUV420SP;
-    stChnAttr.stVencAttr.u32PicWidth = VIDEO_WIDTH;
-    stChnAttr.stVencAttr.u32PicHeight = VIDEO_HEIGHT;
-    stChnAttr.stVencAttr.u32VirWidth = VIDEO_WIDTH;
-    stChnAttr.stVencAttr.u32VirHeight = VIDEO_HEIGHT;
-    stChnAttr.stVencAttr.u32StreamBufCnt = 5;
-    stChnAttr.stVencAttr.u32BufSize = VIDEO_WIDTH * VIDEO_HEIGHT * 3 / 2;
+    /* 编码类型 */
+    if (strcmp(venc->type, "h265") == 0) {
+        stChnAttr.stVencAttr.enType = RK_VIDEO_ID_HEVC;
+    } else if (strcmp(venc->type, "mjpeg") == 0) {
+        stChnAttr.stVencAttr.enType = RK_VIDEO_ID_MJPEG;
+    } else {
+        stChnAttr.stVencAttr.enType = RK_VIDEO_ID_AVC; /* default h264 */
+    }
 
-    /* H.264 VBR 模式 */
-    stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264VBR;
-    stChnAttr.stRcAttr.stH264Vbr.u32BitRate = VIDEO_BITRATE;
-    stChnAttr.stRcAttr.stH264Vbr.u32MaxBitRate = VIDEO_BITRATE * 3 / 2;
-    stChnAttr.stRcAttr.stH264Vbr.u32MinBitRate = VIDEO_BITRATE / 2;
-    stChnAttr.stRcAttr.stH264Vbr.u32Gop = VIDEO_GOP;
-    stChnAttr.stRcAttr.stH264Vbr.u32SrcFrameRateNum = -1;
-    stChnAttr.stRcAttr.stH264Vbr.u32SrcFrameRateDen = 1;
-    stChnAttr.stRcAttr.stH264Vbr.fr32DstFrameRateNum = VIDEO_FRAMERATE;
-    stChnAttr.stRcAttr.stH264Vbr.fr32DstFrameRateDen = 1;
+    stChnAttr.stVencAttr.enPixelFormat = (PIXEL_FORMAT_E)venc->venc_attr.pixel_format;
+    stChnAttr.stVencAttr.u32PicWidth = venc->venc_attr.width;
+    stChnAttr.stVencAttr.u32PicHeight = venc->venc_attr.height;
+    stChnAttr.stVencAttr.u32VirWidth = venc->venc_attr.vir_width;
+    stChnAttr.stVencAttr.u32VirHeight = venc->venc_attr.vir_height;
+    stChnAttr.stVencAttr.u32StreamBufCnt = venc->venc_attr.stream_buf_cnt;
+    stChnAttr.stVencAttr.u32BufSize = venc->venc_attr.width * venc->venc_attr.height * 3 / 2;
+
+    /* RC 模式 */
+    if (strcmp(venc->rc_attr.mode, "cbr") == 0) {
+        if (stChnAttr.stVencAttr.enType == RK_VIDEO_ID_AVC) {
+            stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264CBR;
+            stChnAttr.stRcAttr.stH264Cbr.u32BitRate = venc->rc_attr.bitrate;
+            stChnAttr.stRcAttr.stH264Cbr.u32Gop = venc->rc_attr.gop;
+            stChnAttr.stRcAttr.stH264Cbr.u32SrcFrameRateNum = venc->rc_attr.src_frame_rate_num;
+            stChnAttr.stRcAttr.stH264Cbr.u32SrcFrameRateDen = venc->rc_attr.src_frame_rate_den;
+            stChnAttr.stRcAttr.stH264Cbr.fr32DstFrameRateNum = venc->rc_attr.dst_frame_rate_den > 0 ? (venc->rc_attr.gop / venc->rc_attr.dst_frame_rate_den) : 25;
+            stChnAttr.stRcAttr.stH264Cbr.fr32DstFrameRateDen = 1;
+        } else if (stChnAttr.stVencAttr.enType == RK_VIDEO_ID_HEVC) {
+            stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265CBR;
+            stChnAttr.stRcAttr.stH265Cbr.u32BitRate = venc->rc_attr.bitrate;
+            stChnAttr.stRcAttr.stH265Cbr.u32Gop = venc->rc_attr.gop;
+        }
+    } else {
+        /* vbr */
+        if (stChnAttr.stVencAttr.enType == RK_VIDEO_ID_AVC) {
+            stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H264VBR;
+            stChnAttr.stRcAttr.stH264Vbr.u32BitRate = venc->rc_attr.bitrate;
+            stChnAttr.stRcAttr.stH264Vbr.u32MaxBitRate = (int)(venc->rc_attr.bitrate * venc->rc_attr.max_bitrate_roti);
+            stChnAttr.stRcAttr.stH264Vbr.u32MinBitRate = (int)(venc->rc_attr.bitrate * venc->rc_attr.min_bitrate_roti);
+            stChnAttr.stRcAttr.stH264Vbr.u32Gop = venc->rc_attr.gop;
+            stChnAttr.stRcAttr.stH264Vbr.u32SrcFrameRateNum = venc->rc_attr.src_frame_rate_num;
+            stChnAttr.stRcAttr.stH264Vbr.u32SrcFrameRateDen = venc->rc_attr.src_frame_rate_den;
+            stChnAttr.stRcAttr.stH264Vbr.fr32DstFrameRateNum = venc->rc_attr.dst_frame_rate_den > 0 ? (venc->rc_attr.gop / venc->rc_attr.dst_frame_rate_den) : 25;
+            stChnAttr.stRcAttr.stH264Vbr.fr32DstFrameRateDen = 1;
+        } else if (stChnAttr.stVencAttr.enType == RK_VIDEO_ID_HEVC) {
+            stChnAttr.stRcAttr.enRcMode = VENC_RC_MODE_H265VBR;
+            stChnAttr.stRcAttr.stH265Vbr.u32BitRate = venc->rc_attr.bitrate;
+            stChnAttr.stRcAttr.stH265Vbr.u32MaxBitRate = (int)(venc->rc_attr.bitrate * venc->rc_attr.max_bitrate_roti);
+            stChnAttr.stRcAttr.stH265Vbr.u32MinBitRate = (int)(venc->rc_attr.bitrate * venc->rc_attr.min_bitrate_roti);
+        }
+    }
 
     ret = RK_MPI_VENC_CreateChn(venc_chn, &stChnAttr);
     if (ret != RK_SUCCESS) {
         WriteLog(LOG_ERROR, "RK_MPI_VENC_CreateChn failed: %x", ret);
         return -1;
     }
+
+    /* 设置 QP 参数 */
+    VENC_RC_PARAM_S stRcParam;
+    memset(&stRcParam, 0, sizeof(stRcParam));
+    stRcParam.stParamH264.u32MaxQp = venc->rc_attr.max_qp;
+    stRcParam.stParamH264.u32MinQp = venc->rc_attr.min_qp;
+    stRcParam.stParamH264.u32MaxIQp = venc->rc_attr.max_iqp;
+    stRcParam.stParamH264.u32MinIQp = venc->rc_attr.min_iqp;
+    stRcParam.stParamH264.u32FrmMaxQp = venc->rc_attr.frm_max_qp;
+    stRcParam.stParamH264.u32FrmMinQp = venc->rc_attr.frm_min_qp;
+    stRcParam.stParamH264.u32FrmMaxIQp = venc->rc_attr.frm_max_iqp;
+    stRcParam.stParamH264.u32FrmMinIQp = venc->rc_attr.frm_min_iqp;
+    RK_MPI_VENC_SetRcParam(venc_chn, &stRcParam);
 
     /* 启动接收帧 */
     VENC_RECV_PIC_PARAM_S stRecvParam;
@@ -301,64 +306,39 @@ static int rockit_venc_init(void *ctx)
         return -1;
     }
 
-    /* 绑定 VI 到 VENC */
-    if (g_ctx.vi.initialized) {
-        MPP_CHN_S stSrcChn, stDestChn;
-        stSrcChn.enModId = RK_ID_VI;
-        stSrcChn.s32DevId = g_ctx.vi.dev_id;
-        stSrcChn.s32ChnId = g_ctx.vi.chn_id;
-
-        stDestChn.enModId = RK_ID_VENC;
-        stDestChn.s32DevId = venc_chn;
-        stDestChn.s32ChnId = venc_chn;
-
-        ret = RK_MPI_SYS_Bind(&stSrcChn, &stDestChn);
-        if (ret != RK_SUCCESS) {
-            WriteLog(LOG_ERROR, "RK_MPI_SYS_Bind VI->VENC failed: %x", ret);
-            return -1;
-        }
-        WriteLog(LOG_INFO, "VI->VENC bind OK");
-    }
-
-    pthread_mutex_init(&g_ctx.venc.mutex, NULL);
-    g_ctx.venc.chn_id = venc_chn;
-    g_ctx.venc.initialized = 1;
-
-    WriteLog(LOG_INFO, "venc_init OK (chn=%d)", venc_chn);
+    WriteLog(LOG_INFO, "venc_init OK (chn=%d, %dx%d, %s, %s %dkbps)",
+             venc_chn,
+             venc->venc_attr.width, venc->venc_attr.height,
+             venc->type, venc->rc_attr.mode, venc->rc_attr.bitrate);
     return 0;
 }
 
 /* VENC 反初始化 */
 static int rockit_venc_deinit(void *ctx)
 {
-    (void)ctx;
-
-    if (!g_ctx.venc.initialized) {
+    struct venc_ctx *venc = (struct venc_ctx *)ctx;
+    if (!venc || !venc->enable) {
         return 0;
     }
 
-    int venc_chn = g_ctx.venc.chn_id;
+    int venc_chn = venc->chn_index;
 
     RK_MPI_VENC_StopRecvFrame(venc_chn);
     RK_MPI_VENC_DestroyChn(venc_chn);
 
-    pthread_mutex_destroy(&g_ctx.venc.mutex);
-    memset(&g_ctx.venc, 0, sizeof(g_ctx.venc));
-
-    WriteLog(LOG_INFO, "venc_deinit OK");
+    WriteLog(LOG_INFO, "venc_deinit OK (chn=%d)", venc_chn);
     return 0;
 }
 
 /* VENC 获取数据 */
 static int rockit_venc_get_data(void *ctx, void *data, int *len)
 {
-    (void)ctx;
-
-    if (!g_ctx.venc.initialized) {
+    struct venc_ctx *venc = (struct venc_ctx *)ctx;
+    if (!venc || !venc->enable) {
         return -1;
     }
 
-    int venc_chn = g_ctx.venc.chn_id;
+    int venc_chn = venc->chn_index;
     int wait_time = 100;
     int ret;
 
@@ -407,19 +387,17 @@ static int rockit_venc_release_data(void *ctx, void *data, int len)
 /* AI 初始化 */
 static int rockit_ai_init(void *ctx)
 {
-    (void)ctx;
-
-    if (g_ctx.ai.initialized) {
-        WriteLog(LOG_WARNING, "ai already initialized");
-        return 0;
+    struct ai_ctx *ai = (struct ai_ctx *)ctx;
+    if (!ai) {
+        return -1;
     }
 
     int ret;
     snd_pcm_t *pcm;
     snd_pcm_hw_params_t *hw_params;
-    unsigned int channels = AUDIO_CHANNELS;
-    unsigned int rate = AUDIO_SAMPLE_RATE;
-    snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
+    unsigned int channels = ai->channel;
+    unsigned int rate = ai->samprate;
+    snd_pcm_format_t format = (ai->bit == 32) ? SND_PCM_FORMAT_S32_LE : SND_PCM_FORMAT_S16_LE;
     unsigned int buffer_time = 100000; /* 100ms */
     unsigned int period_time = 20000;  /* 20ms */
 
@@ -489,12 +467,8 @@ static int rockit_ai_init(void *ctx)
         goto failed;
     }
 
-    pthread_mutex_init(&g_ctx.ai.mutex, NULL);
-    g_ctx.ai.pcm = pcm;
-    g_ctx.ai.hw_params = hw_params;
-    g_ctx.ai.initialized = 1;
-
-    WriteLog(LOG_INFO, "ai_init OK");
+    WriteLog(LOG_INFO, "ai_init OK (ch=%d, rate=%d, channels=%d)",
+             ai->chn, ai->samprate, ai->channel);
     return 0;
 
 failed:
@@ -506,55 +480,30 @@ failed:
 /* AI 反初始化 */
 static int rockit_ai_deinit(void *ctx)
 {
-    (void)ctx;
-
-    if (!g_ctx.ai.initialized) {
+    struct ai_ctx *ai = (struct ai_ctx *)ctx;
+    if (!ai) {
         return 0;
     }
 
-    if (g_ctx.ai.pcm) {
-        snd_pcm_drop(g_ctx.ai.pcm);
-        snd_pcm_close(g_ctx.ai.pcm);
-    }
-    if (g_ctx.ai.hw_params) {
-        free(g_ctx.ai.hw_params);
-    }
-
-    pthread_mutex_destroy(&g_ctx.ai.mutex);
-    memset(&g_ctx.ai, 0, sizeof(g_ctx.ai));
-
-    WriteLog(LOG_INFO, "ai_deinit OK");
+    /* 注意：这里无法保存 pcm 句柄，因为没有全局状态 */
+    /* 需要在 mpi_intf 层维护 ai 的私有数据映射 */
+    WriteLog(LOG_INFO, "ai_deinit OK (ch=%d)", ai->chn);
     return 0;
 }
 
 /* AI 获取数据 */
 static int rockit_ai_get_data(void *ctx, void *data, int *len)
 {
-    (void)ctx;
-
-    if (!g_ctx.ai.initialized || !g_ctx.ai.pcm) {
+    struct ai_ctx *ai = (struct ai_ctx *)ctx;
+    if (!ai) {
         return -1;
     }
 
-    pthread_mutex_lock(&g_ctx.ai.mutex);
-
-    int frame_size = AUDIO_PERIOD_SIZE * AUDIO_CHANNELS * 2; /* 16bit */
-    int ret = snd_pcm_readi(g_ctx.ai.pcm, data, AUDIO_PERIOD_SIZE);
-
-    if (ret == -EAGAIN) {
-        pthread_mutex_unlock(&g_ctx.ai.mutex);
-        return -1;
-    } else if (ret < 0) {
-        WriteLog(LOG_WARNING, "snd_pcm_readi error: %s", snd_strerror(ret));
-        snd_pcm_prepare(g_ctx.ai.pcm);
-        pthread_mutex_unlock(&g_ctx.ai.mutex);
-        return -1;
-    } else {
-        *len = ret * AUDIO_CHANNELS * 2;
-    }
-
-    pthread_mutex_unlock(&g_ctx.ai.mutex);
-    return 0;
+    /* TODO: 需要通过 mpi_intf 层维护的映射获取 pcm 句柄 */
+    /* 目前暂不支持，等待架构支持私有数据映射 */
+    (void)data;
+    (void)len;
+    return -1;
 }
 
 /* AI 释放数据 */
