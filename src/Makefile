@@ -91,7 +91,7 @@ $(BUILD_DIR)/%.o: %.cpp
 # 	$(MAKE) -C $(MPI_DIR)/rockchip all
 
 $(SO_ROCKIT): $(BUILD_DIR)/$(MPI_DIR)/rockit/mpi_rockit.o
-	$(CC) -shared -o $@ $< -ldl
+	$(CC) -shared -o $@ $< -L$(ROCKIT_LIB_DIR) -lrockit -ldl
 
 clean:
 	rm -rf $(BUILD_DIR)
