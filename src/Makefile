@@ -37,8 +37,7 @@ BIN  := $(BUILD_DIR)/media-server
 
 # 平台 MPI 动态库（每个平台一个 .so）
 SO_ROCKIT := $(BUILD_DIR)/libmpi_rockit.so
-SO_STUB   := $(BUILD_DIR)/libmpi_stub.so
-MPI_SOLIBS := #$(SO_ROCKIT) $(SO_STUB)
+MPI_SOLIBS := $(SO_ROCKIT)
 
 .PHONY: all clean bin so
 
@@ -69,7 +68,7 @@ $(BUILD_DIR)/%.o: %.cpp
 # $(SO_ROCKIT):
 # 	$(MAKE) -C $(MPI_DIR)/rockchip all
 
-$(SO_STUB): $(BUILD_DIR)/$(MPI_DIR)/mpi_stub.o
+$(SO_ROCKIT): $(BUILD_DIR)/$(MPI_DIR)/rockit/mpi_rockit.o
 	$(CC) -shared -o $@ $<
 
 clean:
