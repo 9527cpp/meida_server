@@ -1,10 +1,28 @@
 # media-server 框架静态库
 # 可在源码树内直接 make，或由 OpenWrt Build/Compile 调用
+#
+# 交叉编译用法:
+#   make CROSS_COMPILE=aarch64-openwrt-linux- \
+#        TOOLCHAIN_DIR=/path/to/toolchain \
+#        TARGET_ARCH=aarch64 -f Makefile
 
-CC     ?= gcc
-CXX    ?= g++
-AR     ?= ar
-CFLAGS ?= -Wall -O2 -fPIC
+# 交叉编译工具链 (通过 CROSS_COMPILE 和 TOOLCHAIN_DIR 指定)
+CROSS_COMPILE ?=
+TOOLCHAIN_DIR ?=
+
+# 如果指定了 TOOLCHAIN_DIR，设置 PATH
+ifeq ($(TOOLCHAIN_DIR),)
+    CC     ?= $(CROSS_COMPILE)gcc
+    CXX    ?= $(CROSS_COMPILE)g++
+    AR     ?= $(CROSS_COMPILE)ar
+else
+    CC     := $(TOOLCHAIN_DIR)/bin/$(CROSS_COMPILE)gcc
+    CXX    := $(TOOLCHAIN_DIR)/bin/$(CROSS_COMPILE)g++
+    AR     := $(TOOLCHAIN_DIR)/bin/$(CROSS_COMPILE)ar
+    PATH   := $(TOOLCHAIN_DIR)/bin:$(PATH)
+endif
+
+CFLAGS   ?= -Wall -O2 -fPIC
 CXXFLAGS ?= -Wall -O2 -fPIC -std=c++11
 
 SRC_DIR := .
@@ -39,6 +57,10 @@ BIN  := $(BUILD_DIR)/media-server
 SO_ROCKIT := $(BUILD_DIR)/libmpi_rockit.so
 MPI_SOLIBS := $(SO_ROCKIT)
 
+# Rockchip 链接库 (在 rockit 目录下)
+ROCKIT_LIB_DIR := $(MPI_DIR)/rockit/lib
+ROCKIT_LIBS := -L$(ROCKIT_LIB_DIR) -lrockit -ldl
+
 .PHONY: all clean bin so
 
 bin: $(LIB) $(BIN) $(MPI_SOLIBS)
@@ -69,7 +91,7 @@ $(BUILD_DIR)/%.o: %.cpp
 # 	$(MAKE) -C $(MPI_DIR)/rockchip all
 
 $(SO_ROCKIT): $(BUILD_DIR)/$(MPI_DIR)/rockit/mpi_rockit.o
-	$(CC) -shared -o $@ $<
+	$(CC) -shared -o $@ $< -ldl
 
 clean:
 	rm -rf $(BUILD_DIR)

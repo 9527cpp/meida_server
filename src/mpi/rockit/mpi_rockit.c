@@ -33,7 +33,7 @@
 #include "rk_mpi_mb.h"
 #include "rk_defines.h"
 
-#include <alsa/asoundlib.h>
+// #include <alsa/asoundlib.h>  /* TODO: re-enable when alsa available */
 
 /* VENC 通道私有数据 */
 typedef struct {
@@ -42,13 +42,13 @@ typedef struct {
     pthread_mutex_t mutex;
 } rockit_venc_priv;
 
-/* AI 通道私有数据 */
-typedef struct {
+/* AI 通道私有数据 - TODO: re-enable when alsa available */
+/* typedef struct {
     snd_pcm_t *pcm;
     snd_pcm_hw_params_t *hw_params;
     int initialized;
     pthread_mutex_t mutex;
-} rockit_ai_priv;
+} rockit_ai_priv; */
 
 static int g_sys_init = 0;
 
@@ -384,97 +384,15 @@ static int rockit_venc_release_data(void *ctx, void *data, int len)
     return 0;
 }
 
-/* AI 初始化 */
+/* AI 初始化 - TODO: re-enable alsa when available */
 static int rockit_ai_init(void *ctx)
 {
     struct ai_ctx *ai = (struct ai_ctx *)ctx;
     if (!ai) {
         return -1;
     }
-
-    int ret;
-    snd_pcm_t *pcm;
-    snd_pcm_hw_params_t *hw_params;
-    unsigned int channels = ai->channel;
-    unsigned int rate = ai->samprate;
-    snd_pcm_format_t format = (ai->bit == 32) ? SND_PCM_FORMAT_S32_LE : SND_PCM_FORMAT_S16_LE;
-    unsigned int buffer_time = 100000; /* 100ms */
-    unsigned int period_time = 20000;  /* 20ms */
-
-    ret = snd_pcm_open(&pcm, "default", SND_PCM_STREAM_CAPTURE, 0);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_open failed: %s", snd_strerror(ret));
-        return -1;
-    }
-
-    hw_params = (snd_pcm_hw_params_t *)calloc(1, snd_pcm_hw_params_sizeof());
-    if (!hw_params) {
-        snd_pcm_close(pcm);
-        return -1;
-    }
-
-    ret = snd_pcm_hw_params_any(pcm, hw_params);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_any failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_access(pcm, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_access failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_format(pcm, hw_params, format);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_format failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_channels(pcm, hw_params, channels);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_channels failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_rate_near(pcm, hw_params, &rate, 0);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_rate_near failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_buffer_time_near(pcm, hw_params, &buffer_time, 0);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_buffer_time_near failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params_set_period_time_near(pcm, hw_params, &period_time, 0);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params_set_period_time_near failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_hw_params(pcm, hw_params);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_hw_params failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    ret = snd_pcm_prepare(pcm);
-    if (ret < 0) {
-        WriteLog(LOG_ERROR, "snd_pcm_prepare failed: %s", snd_strerror(ret));
-        goto failed;
-    }
-
-    WriteLog(LOG_INFO, "ai_init OK (ch=%d, rate=%d, channels=%d)",
-             ai->chn, ai->samprate, ai->channel);
+    WriteLog(LOG_INFO, "ai_init (stub, ch=%d)", ai->chn);
     return 0;
-
-failed:
-    free(hw_params);
-    snd_pcm_close(pcm);
-    return -1;
 }
 
 /* AI 反初始化 */
@@ -484,9 +402,6 @@ static int rockit_ai_deinit(void *ctx)
     if (!ai) {
         return 0;
     }
-
-    /* 注意：这里无法保存 pcm 句柄，因为没有全局状态 */
-    /* 需要在 mpi_intf 层维护 ai 的私有数据映射 */
     WriteLog(LOG_INFO, "ai_deinit OK (ch=%d)", ai->chn);
     return 0;
 }
@@ -494,16 +409,10 @@ static int rockit_ai_deinit(void *ctx)
 /* AI 获取数据 */
 static int rockit_ai_get_data(void *ctx, void *data, int *len)
 {
-    struct ai_ctx *ai = (struct ai_ctx *)ctx;
-    if (!ai) {
-        return -1;
-    }
-
-    /* TODO: 需要通过 mpi_intf 层维护的映射获取 pcm 句柄 */
-    /* 目前暂不支持，等待架构支持私有数据映射 */
+    (void)ctx;
     (void)data;
     (void)len;
-    return -1;
+    return -1;  /* stub: no data */
 }
 
 /* AI 释放数据 */

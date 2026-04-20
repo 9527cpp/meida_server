@@ -1,8 +1,27 @@
 cmake_minimum_required(VERSION 3.10)
-project(media-server C CXX)
+
+# 交叉编译支持
+# 用法:
+#   cmake -DCMAKE_TOOLCHAIN_FILE=toolchain.cmake -B build
+# 或直接指定:
+#   cmake -DCMAKE_C_COMPILER=aarch64-openwrt-linux-gcc \
+#         -DCMAKE_CXX_COMPILER=aarch64-openwrt-linux-g++ \
+#         -B build
+#
+# 工具链文件示例 (toolchain.cmake):
+#   set(CMAKE_SYSTEM_NAME Linux)
+#   set(CMAKE_C_COMPILER /path/to/toolchain/bin/aarch64-openwrt-linux-gcc)
+#   set(CMAKE_CXX_COMPILER /path/to/toolchain/bin/aarch64-openwrt-linux-g++)
+#   set(CMAKE_FIND_ROOT_PATH /path/to/sysroot)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O2 -fPIC")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2 -fPIC -std=c++11")
+
+# 交叉编译时指定 sysroot (通过 CMAKE_SYSROOT 或 -DCMAKE_SYSROOT)
+if(CMAKE_SYSROOT)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --sysroot=${CMAKE_SYSROOT}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --sysroot=${CMAKE_SYSROOT}")
+endif()
 
 # 源文件路径
 set(MPI_DIR ${CMAKE_SOURCE_DIR}/mpi)
@@ -57,6 +76,8 @@ target_include_directories(media_server PUBLIC
 # MPI rockit
 add_library(mpi_rockit SHARED ${MPI_DIR}/rockit/mpi_rockit.c)
 target_include_directories(mpi_rockit PUBLIC ${CMAKE_SOURCE_DIR} ${MPI_DIR} ${LOG_DIR} ${MPI_DIR}/rockit/inc)
+target_link_directories(mpi_rockit PUBLIC ${MPI_DIR}/rockit/lib)
+target_link_libraries(mpi_rockit PUBLIC rockit dl)
 set_target_properties(mpi_rockit PROPERTIES OUTPUT_NAME "libmpi_rockit" PREFIX "")
 
 # 可执行文件
