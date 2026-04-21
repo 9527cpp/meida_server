@@ -1,11 +1,10 @@
 #include "hw_check.hpp"
 #include <fstream>
-#include <string>
+#include <cstring>
 
 hdmi_check::hdmi_check(hw_check_listener *listener, bool run_thread_check)
     : hw_check(hw_type::hdmi, listener, run_thread_check)
 {
-    check_once();
 }
 
 void hdmi_check::check_once()
@@ -15,14 +14,18 @@ void hdmi_check::check_once()
         set_hw_exist(false);
         return;
     }
-    std::string line;
-    bool has_res = false;
-    while (std::getline(f, line)) {
-        if (line.find("resolution") != std::string::npos ||
-            line.find("x") != std::string::npos) {
-            has_res = true;
-            break;
-        }
+
+    char buffer[256];
+    f.getline(buffer, sizeof(buffer));
+    // format: "chipver=0;width=1920;height=1080;time=1609303283"
+    const char* width_str = strstr(buffer, "width=");
+    const char* height_str = strstr(buffer, "height=");
+    if (!width_str || !height_str) {
+        set_hw_exist(false);
+        return;
     }
-    set_hw_exist(has_res);
+
+    int width = atoi(width_str + strlen("width="));
+    int height = atoi(height_str + strlen("height="));
+    set_hw_exist(width > 0 && height > 0);
 }
