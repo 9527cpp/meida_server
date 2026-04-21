@@ -69,7 +69,12 @@ mpi:
 	        TOOLCHAIN_DIR=$(TOOLCHAIN_DIR)
 
 $(STREAM_LIB):
-	$(MAKE) -C $(STREAM_DIR) build
+	$(MAKE) -C $(STREAM_DIR) build \
+		CROSS_COMPILE="$(CROSS_COMPILE)" \
+		TOOLCHAIN_DIR="$(TOOLCHAIN_DIR)" \
+		CC="$(CC)" \
+		CXX="$(CXX)" \
+		AR="$(AR)"
 
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $^

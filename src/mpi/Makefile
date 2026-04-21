@@ -41,7 +41,7 @@ ROCKIT_LIB_DIR := $(MPI_DIR)/rockit/lib
 
 CAN_LINK_ROCKIT := $(shell ROCKIT_SO="$(ROCKIT_LIB_DIR)/librockit.so"; \
                     if [ ! -f "$$ROCKIT_SO" ]; then echo "no"; \
-                    elif file "$$ROCKIT_SO" | grep -q "ELF 64-bit LSB.*x86-64"; then echo "yes"; \
+                    elif file "$$ROCKIT_SO" | grep -q "ELF 64-bit LSB.*ARM aarch64"; then echo "yes"; \
                     else echo "no"; fi)
 
 rockit: $(ROCKIT_LIB)
