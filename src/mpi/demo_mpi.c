@@ -13,7 +13,10 @@
  *   4. 调用 init / get_data / release_data / deinit
  *   5. 释放资源
  *
- * 宏控选择测试平台：
+ * 用法：
+ *   ./demo_mpi -m /path/to/libmpi_stub.so
+ *
+ * 宏控选择测试平台（编译时指定）：
  *   -DMPI_PLATFORM_ROCKIT  -> demo mpi_rockit.so
  *   -DMPI_PLATFORM_HISI    -> demo mpi_hisi.so
  *   -DMPI_PLATFORM_RKMEDIA -> demo mpi_rkmedia.so
@@ -22,17 +25,15 @@
  * 编译：
  *   cd mpi/build && gcc -o demo_mpi_stub ../demo_mpi.c -DMPI_PLATFORM_STUB \
  *       -I.. -I../../mpi_ctx -I../../log -ldl -lm -lpthread
- *
- * 运行（需在 mpi/build/ 目录下）：
- *   ./demo_mpi_stub
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dlfcn.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dlfcn.h>
+#include <getopt.h>
 
 #include "mpi_intf.h"
 #include "mpi_ctx/mpi_ctx_intf.h"
@@ -42,38 +43,63 @@
  * ============================================================================ */
 #if defined(MPI_PLATFORM_ROCKIT)
     #define MPI_PLATFORM_NAME "rockit"
-    #define MPI_SO_NAME       "libmpi_rockit.so"
-    #define MPI_CREATE_SYM    "mpi_intf_create"
 #elif defined(MPI_PLATFORM_HISI)
     #define MPI_PLATFORM_NAME "hisi"
-    #define MPI_SO_NAME       "libmpi_hisi.so"
-    #define MPI_CREATE_SYM    "mpi_intf_create"
 #elif defined(MPI_PLATFORM_RKMEDIA)
     #define MPI_PLATFORM_NAME "rkmedia"
-    #define MPI_SO_NAME       "libmpi_rkmedia.so"
-    #define MPI_CREATE_SYM    "mpi_intf_create"
 #elif defined(MPI_PLATFORM_STUB)
     #define MPI_PLATFORM_NAME "stub"
-    #define MPI_SO_NAME       "libmpi_stub.so"
-    #define MPI_CREATE_SYM    "mpi_intf_create"
 #else
     #error "请定义 -DMPI_PLATFORM_ROCKIT 或 -DMPI_PLATFORM_HISI 或 -DMPI_PLATFORM_RKMEDIA 或 -DMPI_PLATFORM_STUB"
 #endif
 
+/* 所有平台统一的工厂函数符号 */
+#define MPI_CREATE_SYM "mpi_intf_create"
+
+/* ============================================================================
+ * 命令行参数
+ * ============================================================================ */
+static const char *g_so_path = NULL;
+
+static void usage(const char *prog)
+{
+    fprintf(stderr, "用法: %s -m <mpi_so_path>\n", prog);
+    fprintf(stderr, "示例: %s -m ./libmpi_stub.so\n", prog);
+    exit(1);
+}
+
+static int parse_args(int argc, char *argv[])
+{
+    int opt;
+    while ((opt = getopt(argc, argv, "m:h")) != -1) {
+        switch (opt) {
+        case 'm':
+            g_so_path = optarg;
+            break;
+        case 'h':
+        default:
+            usage(argv[0]);
+            break;
+        }
+    }
+    if (!g_so_path) {
+        fprintf(stderr, "错误: 必须指定 -m 参数\n");
+        usage(argv[0]);
+    }
+    return 0;
+}
+
 /* ============================================================================
  * 辅助函数
  * ============================================================================ */
-static void *load_mpi_so(void)
+static void *load_mpi_so(const char *path)
 {
-    const char *paths[] = { "./" MPI_SO_NAME, "../build/" MPI_SO_NAME, NULL };
-    for (int i = 0; paths[i]; i++) {
-        void *h = dlopen(paths[i], RTLD_NOW);
-        if (h) {
-            printf("[DEMO] dlopen %s OK\n", paths[i]);
-            return h;
-        }
+    void *h = dlopen(path, RTLD_NOW);
+    if (h) {
+        printf("[DEMO] dlopen %s OK\n", path);
+        return h;
     }
-    fprintf(stderr, "[DEMO] dlopen %s failed: %s\n", MPI_SO_NAME, dlerror());
+    fprintf(stderr, "[DEMO] dlopen %s failed: %s\n", path, dlerror());
     return NULL;
 }
 
@@ -96,7 +122,67 @@ static struct mpi_intf *create_mpi(void *handle)
 }
 
 /* ============================================================================
- * Demo 1: VI 通道全流程
+ * 文件保存（static FILE*）
+ * ============================================================================ */
+static FILE *g_save_fp = NULL;
+
+static int save_file_open(const char *filename)
+{
+    if (g_save_fp) {
+        fclose(g_save_fp);
+        g_save_fp = NULL;
+    }
+    g_save_fp = fopen(filename, "wb");
+    if (!g_save_fp) {
+        fprintf(stderr, "[DEMO] fopen %s failed\n", filename);
+        return -1;
+    }
+    printf("[DEMO] save file: %s\n", filename);
+    return 0;
+}
+
+static void save_file_write(const void *data, int len)
+{
+    if (!g_save_fp) return;
+    fwrite(data, 1, len, g_save_fp);
+}
+
+static void save_file_close(void)
+{
+    if (g_save_fp) {
+        fclose(g_save_fp);
+        g_save_fp = NULL;
+    }
+}
+
+/* ============================================================================
+ * Demo 1: SYS init / deinit
+ * ============================================================================ */
+static void demo_sys_init_deinit(struct mpi_intf *mpi)
+{
+    printf("\n========== Demo SYS Init/Deinit ==========\n");
+
+    printf("[DEMO] sys_init ...\n");
+    int ret = mpi->sys->sys_init();
+    printf("[DEMO] sys_init -> %d\n", ret);
+
+    printf("[DEMO] sys_init again (idempotent) ...\n");
+    ret = mpi->sys->sys_init();
+    printf("[DEMO] sys_init again -> %d\n", ret);
+
+    printf("[DEMO] sys_deinit ...\n");
+    ret = mpi->sys->sys_deinit();
+    printf("[DEMO] sys_deinit -> %d\n", ret);
+
+    printf("[DEMO] sys_deinit again ...\n");
+    ret = mpi->sys->sys_deinit();
+    printf("[DEMO] sys_deinit again -> %d\n", ret);
+
+    printf("[DEMO] SYS demo done\n");
+}
+
+/* ============================================================================
+ * Demo 2: VI 通道全流程
  * ============================================================================ */
 static void demo_vi_channel(struct mpi_intf *mpi)
 {
@@ -107,7 +193,7 @@ static void demo_vi_channel(struct mpi_intf *mpi)
         .devid = 0,
         .pipeid = 0,
         .chn_index = 0,
-        .entity_name = "virt",
+        .entity_name = "/dev/video0",
         .format = 0,
         .width = 1920,
         .height = 1080,
@@ -127,7 +213,7 @@ static void demo_vi_channel(struct mpi_intf *mpi)
 }
 
 /* ============================================================================
- * Demo 2: VENC 通道全流程（init -> get_data -> release_data -> deinit）
+ * Demo 3: VENC 通道全流程（init -> get_data -> release_data -> deinit）
  * ============================================================================ */
 static void demo_venc_channel(struct mpi_intf *mpi)
 {
@@ -136,7 +222,7 @@ static void demo_venc_channel(struct mpi_intf *mpi)
     struct venc_ctx venc = {
         .enable = 1,
         .chn_index = 0,
-        .type = "h265",
+        .type = "h264",
         .venc_attr = {
             .pixel_format = 0,
             .width = 1920,
@@ -176,6 +262,7 @@ static void demo_venc_channel(struct mpi_intf *mpi)
         ret = mpi->video->venc_get_data(&venc, buf, &len);
         printf("[DEMO] venc_get_data frame[%d] -> ret=%d len=%d\n", i, ret, len);
         if (ret == 0 && len > 0) {
+            save_file_write(buf, len);
             int rel = mpi->video->venc_release_data(&venc, buf, len);
             printf("[DEMO] venc_release_data -> %d\n", rel);
         }
@@ -192,7 +279,42 @@ static void demo_venc_channel(struct mpi_intf *mpi)
 }
 
 /* ============================================================================
- * Demo 3: AI 通道全流程
+ * Demo 4: VPSS 通道全流程
+ * ============================================================================ */
+static void demo_vpss_channel(struct mpi_intf *mpi)
+{
+    printf("\n========== Demo VPSS Channel ==========\n");
+
+    struct vpss_ctx vpss = {
+        .chn_index = 0,
+        .width = 1920,
+        .height = 1080,
+        .out_width = 1280,
+        .out_height = 720,
+        .enable = 1,
+    };
+
+    printf("[DEMO] vpss_init ...\n");
+    int ret = mpi->video->vpss_init(&vpss);
+    printf("[DEMO] vpss_init -> %d\n", ret);
+
+    char buf[8192];
+    int len = sizeof(buf);
+    ret = mpi->video->vpss_get_data(&vpss, buf, &len);
+    printf("[DEMO] vpss_get_data -> ret=%d len=%d\n", ret, len);
+
+    mpi->video->vpss_release_data(&vpss, buf, len);
+    printf("[DEMO] vpss_release_data done\n");
+
+    printf("[DEMO] vpss_deinit ...\n");
+    ret = mpi->video->vpss_deinit(&vpss);
+    printf("[DEMO] vpss_deinit -> %d\n", ret);
+
+    printf("[DEMO] VPSS channel demo done\n");
+}
+
+/* ============================================================================
+ * Demo 5: AI 通道全流程
  * ============================================================================ */
 static void demo_ai_channel(struct mpi_intf *mpi)
 {
@@ -233,7 +355,7 @@ static void demo_ai_channel(struct mpi_intf *mpi)
 }
 
 /* ============================================================================
- * Demo 4: AENC 通道全流程
+ * Demo 6: AENC 通道全流程
  * ============================================================================ */
 static void demo_aenc_channel(struct mpi_intf *mpi)
 {
@@ -256,6 +378,7 @@ static void demo_aenc_channel(struct mpi_intf *mpi)
         ret = mpi->audio->aenc_get_data(&aenc, buf, &len);
         printf("[DEMO] aenc_get_data packet[%d] -> ret=%d len=%d\n", i, ret, len);
         if (ret == 0 && len > 0) {
+            save_file_write(buf, len);
             mpi->audio->aenc_release_data(&aenc, buf, len);
         }
     }
@@ -268,79 +391,20 @@ static void demo_aenc_channel(struct mpi_intf *mpi)
 }
 
 /* ============================================================================
- * Demo 5: VPSS 通道全流程
- * ============================================================================ */
-static void demo_vpss_channel(struct mpi_intf *mpi)
-{
-    printf("\n========== Demo VPSS Channel ==========\n");
-
-    struct vpss_ctx vpss = {
-        .chn_index = 0,
-        .width = 1920,
-        .height = 1080,
-        .out_width = 1280,
-        .out_height = 720,
-        .enable = 1,
-    };
-
-    printf("[DEMO] vpss_init ...\n");
-    int ret = mpi->video->vpss_init(&vpss);
-    printf("[DEMO] vpss_init -> %d\n", ret);
-
-    char buf[8192];
-    int len = sizeof(buf);
-    ret = mpi->video->vpss_get_data(&vpss, buf, &len);
-    printf("[DEMO] vpss_get_data -> ret=%d len=%d\n", ret, len);
-
-    mpi->video->vpss_release_data(&vpss, buf, len);
-    printf("[DEMO] vpss_release_data done\n");
-
-    printf("[DEMO] vpss_deinit ...\n");
-    ret = mpi->video->vpss_deinit(&vpss);
-    printf("[DEMO] vpss_deinit -> %d\n", ret);
-
-    printf("[DEMO] VPSS channel demo done\n");
-}
-
-/* ============================================================================
- * Demo 6: sys init / deinit
- * ============================================================================ */
-static void demo_sys_init_deinit(struct mpi_intf *mpi)
-{
-    printf("\n========== Demo SYS Init/Deinit ==========\n");
-
-    printf("[DEMO] sys_init ...\n");
-    int ret = mpi->sys->sys_init();
-    printf("[DEMO] sys_init -> %d\n", ret);
-
-    printf("[DEMO] sys_init again (idempotent) ...\n");
-    ret = mpi->sys->sys_init();
-    printf("[DEMO] sys_init again -> %d\n", ret);
-
-    printf("[DEMO] sys_deinit ...\n");
-    ret = mpi->sys->sys_deinit();
-    printf("[DEMO] sys_deinit -> %d\n", ret);
-
-    printf("[DEMO] sys_deinit again ...\n");
-    ret = mpi->sys->sys_deinit();
-    printf("[DEMO] sys_deinit again -> %d\n", ret);
-
-    printf("[DEMO] SYS demo done\n");
-}
-
-/* ============================================================================
  * main
  * ============================================================================ */
-int main(void)
+int main(int argc, char *argv[])
 {
+    parse_args(argc, argv);
+
     printf("========================================\n");
     printf("  mpi (%s) 全流程演示\n", MPI_PLATFORM_NAME);
     printf("========================================\n");
 
     /* 1. 加载 .so */
-    void *handle = load_mpi_so();
+    void *handle = load_mpi_so(g_so_path);
     if (!handle) {
-        fprintf(stderr, "[DEMO] FAILED: cannot load %s\n", MPI_SO_NAME);
+        fprintf(stderr, "[DEMO] FAILED: cannot load %s\n", g_so_path);
         return 1;
     }
 
@@ -363,7 +427,7 @@ int main(void)
     printf("  Demo 全部完成\n");
     printf("========================================\n");
 
-    /* 4. 释放（不 dlclose，保持 mpi 指针有效） */
+    save_file_close();
     (void)handle;
     return 0;
 }
