@@ -73,12 +73,8 @@ target_include_directories(media_server PUBLIC
     ${LOG_DIR}
 )
 
-# MPI rockit
-add_library(mpi_rockit SHARED ${MPI_DIR}/rockit/mpi_rockit.c)
-target_include_directories(mpi_rockit PUBLIC ${CMAKE_SOURCE_DIR} ${MPI_DIR} ${LOG_DIR} ${MPI_DIR}/rockit/inc)
-target_link_directories(mpi_rockit PUBLIC ${MPI_DIR}/rockit/lib)
-target_link_libraries(mpi_rockit PUBLIC rockit dl)
-set_target_properties(mpi_rockit PROPERTIES OUTPUT_NAME "libmpi_rockit" PREFIX "")
+# MPI 平台实现（由 mpi/CMakeLists.txt 管理）
+add_subdirectory(${MPI_DIR} mpi_build)
 
 # 可执行文件
 add_executable(media-server main.cpp)
