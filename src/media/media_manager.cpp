@@ -3,18 +3,26 @@
 
 #include "log/log_tag.h"
 
-media_manager::media_manager()
+#include <dirent.h>
+#include <cstring>
+#include <dlfcn.h>
+
+/* 静态全局回调桥接（用于将 C 回调转发到 media_manager 成员函数） */
+static media_manager *g_bridge_mgr = nullptr;
+
+media_manager::media_manager(const char *hw_plugin_dir)
     : ev_running_(false)
 {
+    g_bridge_mgr = this;
+
     hdmi_video_pipe_.reset(new stream_hdmi_video());
     hdmi_audio_pipe_.reset(new stream_hdmi_audio());
     // usb_video_pipe_.reset(new stream_usb_video());
     // mic_audio_pipe_.reset(new stream_mic_audio());
 
-    // hdmi_check_.reset(new hdmi_check(this, false));
-    // usb_check_.reset(new usb_check(this, false));
-    hdmi_check_.reset(new hdmi_check(this, true));
-    usb_check_.reset(new usb_check(this, true));
+    if (hw_plugin_dir) {
+        load_hw_check_plugins(hw_plugin_dir);
+    }
 
     init();
 }
@@ -36,6 +44,8 @@ int media_manager::init()
 
 void media_manager::deinit()
 {
+    unload_hw_check_plugins();
+
     {
         std::lock_guard<std::mutex> lock(ev_mutex_);
         if (ev_running_) {
@@ -114,26 +124,111 @@ void media_manager::event_loop()
 }
 
 /*
-    hw_check 事件回调, 收到事件后 发消息给event_loop, 让event_loop去处理对应的流事件, 而不是在此回调中直接调用 stream_start 或 stream_stop 
+    hw_check C 回调桥接函数（全局静态，由 .so 调用）
+    将 C 回调转发到 media_manager 的成员函数
 */
-void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
+static void hw_check_bridge_cbk(enum hw_check_type type,
+                                  enum hw_check_event ev,
+                                  void *user_data)
+{
+    (void)user_data;
+    if (g_bridge_mgr) {
+        g_bridge_mgr->on_hw_check_notify(type, ev);
+    }
+}
+
+/*
+    扫描目录，加载所有 libhw_check_*.so
+*/
+int media_manager::load_hw_check_plugins(const char *dir)
+{
+    DIR *d = opendir(dir);
+    if (!d) {
+        WriteLog(LOG_ERROR, "opendir(%s) failed: %s", dir, strerror(errno));
+        return -1;
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != nullptr) {
+        if (strncmp(ent->d_name, "libhw_check_", 12) != 0)
+            continue;
+        if (!strstr(ent->d_name, ".so"))
+            continue;
+
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+
+        void *handle = dlopen(path, RTLD_NOW);
+        if (!handle) {
+            WriteLog(LOG_ERROR, "dlopen(%s) failed: %s", path, dlerror());
+            continue;
+        }
+
+        hw_check_create_fn create_fn =
+            (hw_check_create_fn)dlsym(handle, HW_CHECK_CREATE_SYMBOL);
+        if (!create_fn) {
+            WriteLog(LOG_ERROR, "dlsym(%s, %s) failed: %s",
+                     path, HW_CHECK_CREATE_SYMBOL, dlerror());
+            dlclose(handle);
+            continue;
+        }
+
+        struct hw_check_intf *intf = create_fn();
+        if (!intf) {
+            WriteLog(LOG_ERROR, "hw_check_intf_create() returned NULL for %s", path);
+            dlclose(handle);
+            continue;
+        }
+
+        hw_check_instance inst = {};
+        inst.so_handle = handle;
+        inst.opt = intf->opt;
+        inst.ctx = intf->opt->create(
+            HW_TYPE_HDMI, hw_check_bridge_cbk, this, true);
+
+        hw_check_instances_.push_back(inst);
+        WriteLog(LOG_INFO, "loaded hw_check plugin: %s (%s)",
+                 path, intf->name ? intf->name : "unknown");
+    }
+
+    closedir(d);
+    return 0;
+}
+
+void media_manager::unload_hw_check_plugins()
+{
+    for (auto &inst : hw_check_instances_) {
+        if (inst.ctx && inst.opt) {
+            inst.opt->destroy(inst.ctx);
+        }
+        if (inst.so_handle) {
+            dlclose(inst.so_handle);
+        }
+    }
+    hw_check_instances_.clear();
+}
+
+/*
+    hw_check 事件回调, 收到事件后 发消息给event_loop, 让event_loop去处理对应的流事件
+*/
+void media_manager::on_hw_check_notify(enum hw_check_type type, enum hw_check_event ev)
 {
     const char *t = "unknown";
     switch (type) {
-    case hw_type::hdmi: t = "hdmi"; break;
-    case hw_type::usb: t = "usb"; break;
-    case hw_type::mic: t = "mic"; break;
+    case HW_TYPE_HDMI: t = "hdmi"; break;
+    case HW_TYPE_USB:  t = "usb";  break;
+    case HW_TYPE_MIC:  t = "mic";  break;
     }
 
-    const char *e = (ev == hw_event::plug_in) ? "plug_in" : "plug_out";
+    const char *e = (ev == HW_EV_PLUG_IN) ? "plug_in" : "plug_out";
     WriteLog(LOG_INFO, "%s %s", t, e);
 
-    if (type == hw_type::hdmi) {
+    if (type == HW_TYPE_HDMI) {
         /* HDMI plug_in/out：对所有 enable 的 venc 通道分别 start/stop */
         for (int i = 0; i < MAX_VENC_CHN; i++) {
             media_event ev_media;
-            ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
-                                                      : media_event_type::stop_video;
+            ev_media.type = (ev == HW_EV_PLUG_IN) ? media_event_type::start_video
+                                                 : media_event_type::stop_video;
             ev_media.chn = i;
             ev_media.listener = nullptr;
             post_event(ev_media);
@@ -141,15 +236,5 @@ void media_manager::on_hw_check_notify(hw_type type, hw_event ev)
         return;
     }
 
-    /* 
-    * TODO:
-    * 其它硬件类型保持现有行为（如需同样批量处理可再继续补齐） 
-    */
-    // media_event ev_media;
-    // ev_media.type = (ev == hw_event::plug_in) ? media_event_type::start_video
-    //                                           : media_event_type::stop_video;
-    // ev_media.chn = 0;
-    // ev_media.listener = nullptr;
-    // post_event(ev_media);
-
+    /* TODO: 其它硬件类型处理 */
 }

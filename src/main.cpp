@@ -49,6 +49,7 @@ static void print_usage(const char *prog)
 {
     printf("Usage: %s [OPTIONS]\n"
            "  -m, --mpi <path>    MPI shared library path (e.g. libmpi_rockit.so)\n"
+           "  -w, --hw <dir>      Directory containing hw_check .so plugins\n"
            "  -c, --cfg <path>    Config file path (default: /tmp/config.json)\n"
            "  -u, --enable-uds    Enable UDS server (multi-client)\n"
            "  -f, --enable-file   Write channel 0 encoded video to a file\n"
@@ -60,6 +61,7 @@ static void print_usage(const char *prog)
 
 static const struct option long_options[] = {
     {"mpi",         required_argument, NULL, 'm'},
+    {"hw",          required_argument, NULL, 'w'},
     {"cfg",         required_argument, NULL, 'c'},
     {"enable-uds",  no_argument,       NULL, 'u'},
     {"enable-file", no_argument,       NULL, 'f'},
@@ -69,20 +71,22 @@ static const struct option long_options[] = {
 
 int main(int argc, char *argv[])
 {
-    media_manager mgr;
-    std::unique_ptr<uds_connection_manager> uds_mgr;
     const char *uds_path = "/tmp/media_server.sock";
     const char *cfg_path = nullptr;
     const char *mpi_so_path = NULL;
+    const char *hw_dir = nullptr;
 
     struct mpi_ctx_intf *ctx_intf = &json_ctx_intf;
     bool enable_uds = false;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:c:uh", long_options, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:w:c:uh", long_options, NULL)) != -1) {
         switch (opt) {
         case 'm':
-            mpi_so_path = optarg;
+            mpi_so_path = strdup(optarg);
+            break;
+        case 'w':
+            hw_dir = strdup(optarg);
             break;
         case 'c':
             cfg_path = strdup(optarg);
@@ -98,6 +102,10 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+
+    /* 0: 创建 media_manager（会加载 hw_check 插件目录） */
+    media_manager mgr(hw_dir);
+    std::unique_ptr<uds_connection_manager> uds_mgr;
 
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);

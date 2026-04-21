@@ -44,8 +44,6 @@ C_SRCS   := $(MPI_DIR)/mpi_intf.c $(MPI_DIR)/mpi_stub.c $(CTX_DIR)/mpi_ctx_intf.
 CXX_SRCS := $(LISTEN_DIR)/uds_stream.cpp \
             $(LISTEN_DIR)/uds_connection_manager.cpp \
             $(LISTEN_DIR)/file_stream.cpp \
-            $(HW_DIR)/hw_check.cpp $(HW_DIR)/hdmi_check.cpp \
-            $(HW_DIR)/usb_check.cpp \
             $(MEDIA_DIR)/media_manager.cpp
 
 OBJS_C   := $(C_SRCS:.c=.o)
@@ -56,9 +54,9 @@ LIB  := $(BUILD_DIR)/libmedia_server.a
 MAIN_OBJ := $(BUILD_DIR)/main.o
 BIN  := $(BUILD_DIR)/media-server
 
-.PHONY: all clean bin so mpi
+.PHONY: all clean bin so mpi hw_check
 
-all: bin so
+all: bin so hw_check
 
 bin: $(STREAM_LIB) $(LIB) $(BIN) $(MPI_SOLIBS)
 
@@ -66,6 +64,10 @@ so: mpi
 
 mpi:
 	$(MAKE) -C $(MPI_DIR) CROSS_COMPILE=$(CROSS_COMPILE) \
+	        TOOLCHAIN_DIR=$(TOOLCHAIN_DIR)
+
+hw_check:
+	$(MAKE) -C $(HW_DIR) CROSS_COMPILE=$(CROSS_COMPILE) \
 	        TOOLCHAIN_DIR=$(TOOLCHAIN_DIR)
 
 $(STREAM_LIB):
@@ -98,3 +100,4 @@ clean:
 	rm -rf $(BUILD_DIR)
 	$(MAKE) -C $(MPI_DIR) clean
 	$(MAKE) -C $(STREAM_DIR) clean
+	$(MAKE) -C $(HW_DIR) clean

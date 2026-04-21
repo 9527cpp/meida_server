@@ -5,17 +5,25 @@
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <vector>
 
 #include "stream/stream_hdmi_video.hpp"
 #include "stream/stream_hdmi_audio.hpp"
 #include "stream/stream_listener.hpp"
-#include "hw_check/hw_check.hpp"
+#include "hw_check/hw_check_intf.h"
 #include "media_events.hpp"
 
+/* hw_check 插件实例抽象（不直接依赖 C++ 类） */
+struct hw_check_instance {
+    void *so_handle;                  /* dlopen 句柄 */
+    struct hw_check_opt *opt;         /* 函数指针集合 */
+    struct hw_check_ctx *ctx;         /* 实例上下文 */
+};
+
 /* 全局 media 管理：各路pipe流、事件循环与处理、硬件检测 */
-class media_manager : public media_event_sink, public hw_check_listener {
+class media_manager : public media_event_sink {
 public:
-    media_manager();
+    explicit media_manager(const char *hw_plugin_dir = nullptr);
     ~media_manager();
 
     /* 初始化 */
@@ -27,11 +35,13 @@ public:
     /* 发送事件 */
     void post_event(const media_event &ev) override;
 
-    /* 硬件事件回调 */
-    void on_hw_check_notify(hw_type type, hw_event ev) override;
+    /* 硬件事件回调（由 C 回调桥接函数调用） */
+    void on_hw_check_notify(enum hw_check_type type, enum hw_check_event ev);
 
 private:
     void event_loop();
+    int load_hw_check_plugins(const char *dir);
+    void unload_hw_check_plugins();
 
     /* 各路pipe流 */
     std::unique_ptr<stream_hdmi_video> hdmi_video_pipe_;
@@ -39,9 +49,8 @@ private:
     // std::unique_ptr<stream_hdmi_video> usb_video_pipe_;
     // std::unique_ptr<stream_hdmi_audio> mic_audio_pipe_;
 
-    /* 硬件检测 */
-    std::unique_ptr<hw_check> hdmi_check_;
-    std::unique_ptr<hw_check> usb_check_;
+    /* 硬件检测插件实例 */
+    std::vector<hw_check_instance> hw_check_instances_;
 
     /* 消息相关: 事件循环、事件队列、事件处理 */
     std::mutex ev_mutex_;
