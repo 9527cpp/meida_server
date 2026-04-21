@@ -13,6 +13,7 @@
  */
 
 #include "mpi_intf.h"
+#include "mpi_ctx/mpi_ctx_intf.h"
 #include <stdio.h>
 
 #define MODULE_TAG "mpi_stub"
@@ -97,13 +98,13 @@ static int stub_venc_deinit(void *ctx)
 
 static int stub_venc_get_data(void *ctx, void *data, int *len)
 {
-    (void)ctx;
-    /* 桩：模拟无数据，返回 -1 让 stream_venc 线程 sleep；实际平台从编码器取数 */
+    struct venc_ctx *venc = (struct venc_ctx *)ctx;
+    if (!venc || !venc->enable) {
+        return -1;
+    }
     (void)data;
     (void)len;
-    //return -1;
-    *len = 100;
-    return 0;
+    return -1;
 }
 
 static int stub_venc_release_data(void *ctx, void *data, int len)
@@ -116,7 +117,10 @@ static int stub_venc_release_data(void *ctx, void *data, int len)
 
 static int stub_ai_init(void *ctx)
 {
-    (void)ctx;
+    if (!ctx) {
+        WriteLog(LOG_ERROR, "ai_init: NULL ctx");
+        return -1;
+    }
     WriteLog(LOG_INFO, "ai_init");
     return 0;
 }
@@ -188,6 +192,7 @@ static struct mpi_video_opt stub_video_opt = {
 static struct mpi_audio_opt stub_audio_opt = {
     .ai_init = stub_ai_init,
     .ai_deinit = stub_ai_deinit,
+    .ai_get_data = NULL,   /* AI stub 暂不支持 */
     .ai_release_data = stub_ai_release_data,
     .aenc_init = stub_aenc_init,
     .aenc_deinit = stub_aenc_deinit,
