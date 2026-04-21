@@ -22,16 +22,8 @@ set(C_SRCS
     ${CTX_DIR}/mpi_ctx_json.c
 )
 
-# C++ 源文件
+# C++ 源文件（stream 模块已独立为 libstream.a）
 set(CXX_SRCS
-    ${STREAM_DIR}/stream_base.cpp
-    ${STREAM_DIR}/stream_vi.cpp
-    ${STREAM_DIR}/stream_vpss.cpp
-    ${STREAM_DIR}/stream_venc.cpp
-    ${STREAM_DIR}/stream_ai.cpp
-    ${STREAM_DIR}/stream_aenc.cpp
-    ${STREAM_DIR}/stream_hdmi_video.cpp
-    ${STREAM_DIR}/stream_hdmi_audio.cpp
     ${LISTEN_DIR}/uds_stream.cpp
     ${LISTEN_DIR}/uds_connection_manager.cpp
     ${LISTEN_DIR}/file_stream.cpp
@@ -40,6 +32,9 @@ set(CXX_SRCS
     ${HW_DIR}/usb_check.cpp
     ${MEDIA_DIR}/media_manager.cpp
 )
+
+# stream 模块子目录
+add_subdirectory(${STREAM_DIR})
 
 # 静态库
 add_library(media_server STATIC ${C_SRCS} ${CXX_SRCS})
@@ -53,6 +48,9 @@ target_include_directories(media_server PUBLIC
     ${MEDIA_DIR}
     ${LOG_DIR}
 )
+
+# 链接 stream 静态库
+target_link_libraries(media_server stream)
 
 # 可执行文件
 add_executable(media-server main.cpp)
